@@ -2,6 +2,11 @@
 
 const R = require('ramda')
 
+// TYPES
+// Chromosome :: [Bit]
+// Gene :: (Bit, Bit, Bit, Bit)
+// GeneType :: Number | Operator
+
 const geneMap = {
   '0': [0,0,0,0],
   '1': [0,0,0,1],
@@ -19,21 +24,49 @@ const geneMap = {
   '/': [1,1,0,1]
 }
 
-// TYPES
-// Chromosome :: [Bit]
-// Gene :: (Bit, Bit, Bit, Bit)
+const GeneType = {
+  number: 'number',
+  operator: 'operator'
+}
+const numbers = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
+const operators = ['+', '-', '*', '/']
 
 // Char -> Gene
 const charToGene = x => geneMap[x]
 
 // Gene -> Char
-const geneToChar = x => (
-  Object.entries(geneMap)
-    .find(([k, v]) => R.equals(x, v))[0]
-)
+const geneToChar = x => {
+  const y = Object.entries(geneMap)
+        .find(([_, v]) => R.equals(x, v))
+  return y ? y[0] : 'n/a'
+}
 
 // Chromosome -> [Gene]
 const genes = x => R.splitEvery(4, x)
+
+// Chromosome -> Chromosome
+const clean = x => {
+  const buildChrom = (next, head) => geneType => {
+    const c = geneToChar(head)
+    return (
+      geneType === GeneType.number ? (
+        numbers.includes(c)
+          ? [head, ...next(GeneType.operator)].flat()
+          : next(geneType)
+      ) : geneType === GeneType.operator ? (
+        operators.includes(c)
+          ? [head, ...next(GeneType.number)].flat()
+          : next(geneType)
+      ) : next(geneType)
+    )
+  }
+  
+  return genes(x)
+    .reduceRight(buildChrom, consume => [])(GeneType.number)
+}
+
+// Chromosome -> String
+const show = x => genes(x).map(geneToChar).join(' ')
 
 // Chromosome -> Integer
 const decode = x => {
@@ -55,6 +88,8 @@ module.exports = {
   charToGene,
   geneToChar,
   genes,
+  clean,
+  show,
   decode,
   fitness
 }
