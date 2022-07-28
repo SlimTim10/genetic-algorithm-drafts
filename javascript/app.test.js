@@ -23,6 +23,19 @@ const chromosome2 = [0,0,1,0,0,0,1,0,1,0,1,0,1,1,1,0,1,0,1,1,0,1,1,1,0,0,1,0]
 // = 42
 const chromosome3 = [0,1,1,1,1,1,0,0,0,0,1,1,1,1,0,0,0,0,1,0,1,0,1,0]
 
+// 7 * 3 * 2 + 1
+// = 7 * 3 * 2 + 1
+// = 43
+const chromosome4 = [
+  0,1,1,1,
+  1,1,0,0,
+  0,0,1,1,
+  1,1,0,0,
+  0,0,1,0,
+  1,0,1,0,
+  0,0,0,1
+]
+
 test('converts 6 to gene [0,1,1,0]', () => {
   expect(charToGene('6')).toEqual([0,1,1,0])
 })
@@ -79,5 +92,13 @@ test('fitness', () => {
   })
   expect(fitness(chromosome3, 42)).toEqual({
     nothing: true
+  })
+  expect(fitness([0,0,0,1,0,0,0,0,1,1,1,0,0,1,0,0,1,1,0,0,0,0,1,1], 42)).toEqual({
+    nothing: false,
+    val: 1/(42-3)
+  })
+  expect(fitness(chromosome4, 42)).toEqual({
+    nothing: false,
+    val: 1
   })
 })
