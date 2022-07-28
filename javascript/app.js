@@ -61,8 +61,12 @@ const clean = x => {
     )
   }
   
-  return genes(x)
-    .reduceRight(buildChrom, consume => [])(GeneType.number)
+  const cleanedChrom = genes(x)
+        .reduceRight(buildChrom, _ => [])(GeneType.number)
+  const gs = genes(cleanedChrom)
+  return (!numbers.includes(geneToChar(R.last(gs))))
+    ? R.init(gs).flat()
+    : cleanedChrom
 }
 
 // Chromosome -> String
@@ -70,13 +74,27 @@ const show = x => genes(x).map(geneToChar).join(' ')
 
 // Chromosome -> Integer
 const decode = x => {
-  const gs = genes(x)
+  const gs = genes(clean(x))
+  return R.compose(R.splitEvery(2), R.tail)(gs)
+    .reduce((acc, [g1, g2]) => {
+      const op = geneToChar(g1)
+      const n = Number(geneToChar(g2))
+      return (
+        op === '+' ? acc + n
+          : op === '-' ? acc - n
+          : op === '*' ? acc * n
+          : op === '/' ? acc / n
+          : acc
+      )
+    }, Number(geneToChar(R.head(gs))))
 }
 
 // (Chromosome, Integer) -> Maybe Float
 const fitness = (chrom, target) => {
   const x = decode(chrom)
-  if (target - x === 0) return {nothing: true}
+  if (target - x === 0) return {
+    nothing: true
+  }
   return {
     nothing: false,
     val: 1 / (target - x)
