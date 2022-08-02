@@ -62,7 +62,7 @@ const clean = x => {
   }
   
   const cleanedChrom = genes(x)
-        .reduceRight(buildChrom, _ => [])(GeneType.number)
+        .reduceRight(buildChrom, () => [])(GeneType.number)
   const gs = genes(cleanedChrom)
   return (!numbers.includes(geneToChar(R.last(gs))))
     ? R.init(gs).flat()
@@ -108,7 +108,7 @@ const getRandomInt = (x, y) => (
 )
 
 const makeGene = () => R.times(
-  _ => getRandomInt(0, 1),
+  () => getRandomInt(0, 1),
   R.compose(R.length, R.head, Object.values)(geneMap)
 )
 
@@ -116,6 +116,53 @@ const makeChromosome = () => {
   const r = getRandomInt(1, 40)
   const gs = R.times(makeGene, r)
   return gs.flat()
+}
+
+// [Chromosome] -> [Chromosome]
+const sortByFitness = R.sortBy(x => {
+  const f = fitness(x, target)
+  return f.nothing ? Infinity : f.val
+})
+
+// 
+// [Chromosome] -> (Chromosome, [Chromosome])
+const rouletteSelect = (population, target) => {
+  const s = R.compose(
+    R.sum,
+    R.map(x => fitness(x, target))
+  )(population)
+  const r = Math.random() * s
+  // const chosen = R.reduce(
+  //   (acc, x) => (console.log('---- x', x), acc <= 0) ? R.reduced(x) : (acc - fitness(x, target).val),
+  //   r,
+  //   population
+  // )
+  // const chosen = R.reduceWhile(
+  //   (acc, x) => (acc > 0) && !fitness(x, target).nothing,
+  //   (acc, x) => acc - fitness(x, target).val,
+  //   r,
+  //   population
+  // )
+  const cfs = R.scan(
+    _,
+    _,
+    R.map(x => fitness(x, target), population)
+  )
+  console.log('---- chosen:', chosen)
+  const newPopulation = R.without([chosen], population)
+  return [chosen, newPopulation]
+}
+
+// Float -> Chromosome -> Chromosome -> (Chromosome, Chromosome)
+const crossover = (crossoverRate, x, y) => {
+  // TODO
+  return (x, y)
+}
+
+// Float -> Chromosome -> Chromosome
+const mutate = (mutationRate, x) => {
+  // TODO
+  return x
 }
 
 /*
@@ -126,16 +173,45 @@ At the beginning of a run of a genetic algorithm a large population of random ch
   4. Step through the chosen chromosomes bits and flip dependent on the mutation rate.
   5. Repeat step 2, 3, 4 until a new population of N members has been created.
 */
-const run = (populationSize, maxSteps, target) => {
-  const population = R.times(makeChromosome, populationSize)
+const run = (populationSize, maxSteps, target, crossoverRate, mutationRate) => {
+  const initialPopulation = R.times(makeChromosome, populationSize)
+
+  const step = (population, n) => {
+    console.log('step:', n)
+    if (n > maxSteps) return population
+
+    console.log('population:', population)
+    
+    const newPopulation = R.flatten(R.unfold(pop => {
+      console.log('-- pop length:', pop.length)
+      if (R.isEmpty(pop)) return false
+      // Choose 2 chromosomes using roulette wheel
+      const [chrom1, pop_] = rouletteSelect(pop, target)
+      console.log('-- chrom1:', chrom1)
+      console.log('-- pop_ length:', pop_.length)
+      const [chrom2, pop__] = rouletteSelect(pop_, target)
+      console.log('-- chrom2:', chrom2)
+      // Apply crossover
+      const [chrom1C, chrom2C] = crossover(crossoverRate, chrom1, chrom2)
+      // Apply mutation
+      const chrom1M = mutate(mutationRate, chrom1C)
+      const chrom2M = mutate(mutationRate, chrom2C)
+      return [[chrom1M, chrom2M], pop__]
+    }, population))
+    console.log('newPopulation:', newPopulation)
+    
+    return step(newPopulation, n + 1)
+  }
+  // const finalPopulation = R.unfold(step, initialPopulation)
+  // const finalPopulation = R.reduceRight(step, _ => [], R.range(0, maxSteps))(initialPopulation)
+  const finalPopulation = step(initialPopulation, 0)
+  
   const best = R.compose(
     R.head,
     R.reverse,
-    R.sortBy(x => {
-      const f = fitness(x, target)
-      return f.nothing ? Infinity : f.val
-    })
-  )(population)
+    sortByFitness
+  )(finalPopulation)
+  
   console.log('BEST')
   console.log('chromosome:', best)
   console.log(show(best))
@@ -143,7 +219,8 @@ const run = (populationSize, maxSteps, target) => {
   console.log('=', decode(best))
   console.log('fitness:', fitness(best, target))
 }
-run(10, 10, 42)
+
+run(10, 10, 42, 0.7, 0.001)
 
 module.exports = {
   geneMap,
