@@ -15,7 +15,7 @@ function encodeGene(x) {
                                                 : R.equals(x, '-') ? [1, 0, 1, 1]
                                                     : R.equals(x, '*') ? [1, 1, 0, 0]
                                                         : R.equals(x, '/') ? [1, 1, 0, 1]
-                                                            : [0, 0, 0, 0]);
+                                                            : [1, 1, 1, 1]);
 }
 function decodeGene(x) {
     return (R.equals(x, [0, 0, 0, 0]) ? '0'
@@ -32,5 +32,13 @@ function decodeGene(x) {
                                                 : R.equals(x, [1, 0, 1, 1]) ? '-'
                                                     : R.equals(x, [1, 1, 0, 0]) ? '*'
                                                         : R.equals(x, [1, 1, 0, 1]) ? '/'
-                                                            : '0');
+                                                            : 'n/a');
 }
+function randomBit() {
+    return (Math.random() * 2) < 1 ? 0 : 1;
+}
+function randomGene() {
+    return [randomBit(), randomBit(), randomBit(), randomBit()];
+}
+console.log('randomBit:', randomBit());
+console.log('randomGene:', randomGene());

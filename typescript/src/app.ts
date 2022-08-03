@@ -3,7 +3,7 @@ const R = require('ramda')
 type Bit = 0 | 1
 type Gene = [Bit, Bit, Bit, Bit]
 type Chromosome = Bit[]
-type Char = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '+' | '-' | '*' | '/'
+type Char = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '+' | '-' | '*' | '/' | 'n/a'
 
 function encodeGene(x: Char): Gene {
 	return (
@@ -21,7 +21,7 @@ function encodeGene(x: Char): Gene {
 			: R.equals(x, '-') ? [1, 0, 1, 1]
 			: R.equals(x, '*') ? [1, 1, 0, 0]
 			: R.equals(x, '/') ? [1, 1, 0, 1]
-			: [0, 0, 0, 0]
+			: [1, 1, 1, 1]
 	)
 }
 
@@ -41,7 +41,14 @@ function decodeGene(x: Gene): Char {
 			: R.equals(x, [1, 0, 1, 1]) ? '-'
 			: R.equals(x, [1, 1, 0, 0]) ? '*'
 			: R.equals(x, [1, 1, 0, 1]) ? '/'
-			: '0'
+			: 'n/a'
 	)
 }
 
+function randomBit(): Bit {
+	return (Math.random() * 2) < 1 ? 0 : 1
+}
+
+function randomGene(): Gene {
+	return [randomBit(), randomBit(), randomBit(), randomBit()]
+}
