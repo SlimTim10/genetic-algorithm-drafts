@@ -82,21 +82,21 @@ export const isNumber = (x: Char): boolean =>
 export const isOperator = (x: Char): boolean =>
 	R.includes(x, ['+', '-', '*', '/'])
 
+enum Token {
+	Operator,
+	Number,
+}
+
+enum Operator {
+	Add,
+	Subtract,
+	Multiply,
+	Divide,
+}
+
 // Evaluate a series of Chars
 // e.g., ['1', '+', '1'] = 2
-export const evaluate = (xs: Char[]): number => {
-	enum Token {
-		Operator,
-		Number,
-	}
-	
-	enum Operator {
-		Add,
-		Subtract,
-		Multiply,
-		Divide,
-	}
-	
+export const evaluate = (xs: Char[]): number => {	
 	const f = ([acc, op, tok]: [number, Operator, Token], x: Char): [number, Operator, Token] => {
 		if (R.equals(tok, Token.Number) && isNumber(x)) {
 			return (
@@ -144,13 +144,13 @@ const rouletteSelect = (
 ): [Chromosome, Chromosome[]] => {
 	const fitnesses: number[] = R.map((x: Chromosome) => fitness(x, target), population)
 	const totalFitness: number = R.sum(fitnesses)
-	const cumulFitnesses: number[] = R.scan(R.add, 0, fitnesses)
+	const cumulFitnesses: number[] = R.tail(R.scan(R.add, 0, fitnesses))
 	
 	const r: number = getRandomNumber(0, totalFitness)
-	const pickIdx: number = R.findIndex((f: number) => f >= r, fitnesses)
+	const pickIdx: number = R.findIndex((f: number) => f >= r, cumulFitnesses)
 	const pick: Chromosome = population[pickIdx]
 	const newPopulation: Chromosome[] = R.remove(pickIdx, 1, population)
-	
+
 	return [pick, newPopulation]
 }
 
@@ -159,24 +159,59 @@ const crossover = (
 	x: Chromosome,
 	y: Chromosome
 ): [Chromosome, Chromosome] => {
-	// TODO
-
-	return [x, y]
+	const r: number = getRandomNumber(0, 1)
+	if (r <= crossoverRate) {
+		const xg: Gene[] = genes(x)
+		const yg: Gene[] = genes(y)
+		const idx: number = getRandomInt(1, R.min(R.length(xg), R.length(yg)) - 1)
+		const [xStart, xEnd]: [Gene[], Gene[]] = R.splitAt(idx, xg)
+		const [yStart, yEnd]: [Gene[], Gene[]] = R.splitAt(idx, yg)
+		const xNew: Chromosome = R.flatten([xStart, yEnd])
+		const yNew: Chromosome = R.flatten([yStart, xEnd])
+		return [xNew, yNew]
+	} else {
+		return [x, y]
+	}
 }
 
 const mutate = (
 	mutationRate: number,
 	x: Chromosome
 ): Chromosome => {
-	// TODO
-
-	return x
+	const flip = (b: Bit): Bit => b === 0 ? 1 : 0
+	return R.map((b: Bit) => {
+		const r: number = getRandomNumber(0, 1)
+		if (r <= mutationRate) {
+			return flip(b)
+		} else {
+			return b
+		}
+	}, x)
 }
 
-const sortByFitness = (population: Chromosome[]): Chromosome[] => {
-	// TODO
+export const showChromosome = (x: Chromosome): string => R.compose(
+	R.join(' '),
+	R.map(decodeGene),
+	genes
+)(x)
 
-	return population
+export const showCleanChromosome = (x: Chromosome): string => {
+	const cs: Char[] = R.compose(
+		R.map(decodeGene),
+		genes
+	)(x)
+	const f = ([acc, tok]: [Char[], Token], x: Char): [Char[], Token] => {
+		if (R.equals(tok, Token.Number) && isNumber(x)) {
+			return [[...acc, x], Token.Operator]
+		} else if (R.equals(tok, Token.Operator) && isOperator(x)) {
+			return [[...acc, x], Token.Number]
+		} else {
+			return [acc, tok]
+		}
+	}
+	
+	const cs_: Char[] = R.reduce(f, [[], Token.Number], cs)[0]
+	return R.join(' ', cs_)
 }
 
 /*
@@ -194,21 +229,26 @@ const run = (
 	crossoverRate: number,
 	mutationRate: number
 ): void => {
-	const initialPopulation: Chromosome[] = R.times((_: number) => randomChromosome(1, 40), populationSize)
+	const initialPopulation: Chromosome[] = R.times((_: number) => randomChromosome(1, 20), populationSize)
 
 	const step = (population: Chromosome[], n: number): Chromosome[] => {
+		console.log('step:', n)
 		if (n >= maxSteps) return population
 
-		const newPopulation: Chromosome[] = R.flatten(R.unfold((pop: Chromosome[]) => {
+		const newPopulation: Chromosome[] = R.unnest(R.unfold((pop: Chromosome[]) => {
 			if (R.isEmpty(pop)) return false
+			
 			// Choose 2 chromosomes using roulette wheel
 			const [chrom1, pop_]: [Chromosome, Chromosome[]] = rouletteSelect(pop, target)
 			const [chrom2, pop__]: [Chromosome, Chromosome[]] = rouletteSelect(pop_, target)
+
 			// Apply crossover
 			const [chrom1C, chrom2C]: [Chromosome, Chromosome] = crossover(crossoverRate, chrom1, chrom2)
+			
 			// Apply mutation
 			const chrom1M: Chromosome = mutate(mutationRate, chrom1C)
 			const chrom2M: Chromosome = mutate(mutationRate, chrom2C)
+
 			return [[chrom1M, chrom2M], pop__]
 		}, population))
 
@@ -216,72 +256,68 @@ const run = (
 	}
 
 	const finalPopulation: Chromosome[] = step(initialPopulation, 0)
+	const best: Chromosome = R.reduce(R.maxBy((x: Chromosome) => fitness(x, target)), 0, finalPopulation)
 
-	const best: Chromosome = R.compose(
-		R.head,
-		R.reverse,
-		sortByFitness
-	)(finalPopulation)
-
-	console.log('BEST')
-	console.log('chromosome:', best)
+	console.log('best:', best)
+	console.log(showChromosome(best))
+	console.log('=', showCleanChromosome(best))
 	console.log('=', decodeChromosome(best))
 	console.log('fitness:', fitness(best, target))
 }
 
-// run(10, 10, 42, 0.7, 0.001)
+run(100, 20, 42, 0.7, 0.001)
 
-// 6 + 5 * 4 / 2 + 1
-// = 23
-const chrom1: Bit[] = [
-	0,1,1,0,
-	1,0,1,0,
-	0,1,0,1,
-	1,1,0,0,
-	0,1,0,0,
-	1,1,0,1,
-	0,0,1,0,
-	1,0,1,0,
-	0,0,0,1
-]
-console.log('chrom1')
-console.log('decoded:', decodeChromosome(chrom1))
-console.log('fitness:', fitness(chrom1, 42))
+// // 6 + 5 * 4 / 2 + 1
+// // = 23
+// const chrom1: Bit[] = [
+// 	0,1,1,0,
+// 	1,0,1,0,
+// 	0,1,0,1,
+// 	1,1,0,0,
+// 	0,1,0,0,
+// 	1,1,0,1,
+// 	0,0,1,0,
+// 	1,0,1,0,
+// 	0,0,0,1
+// ]
+// console.log('chrom1')
+// console.log('decoded:', decodeChromosome(chrom1))
+// console.log('fitness:', fitness(chrom1, 42))
 
-//  2 2 + n/a - 7 2
-// = 2 + 7
-// = 9
-const chrom2: Bit[] = [
-	0,0,1,0,
-	0,0,1,0,
-	1,0,1,0,
-	1,1,1,0,
-	1,0,1,1,
-	0,1,1,1,
-	0,0,1,0
-]
-console.log('chrom2')
-console.log('decoded:', decodeChromosome(chrom2))
-console.log('fitness:', fitness(chrom2, 42))
+// //  2 2 + n/a - 7 2
+// // = 2 + 7
+// // = 9
+// const chrom2: Bit[] = [
+// 	0,0,1,0,
+// 	0,0,1,0,
+// 	1,0,1,0,
+// 	1,1,1,0,
+// 	1,0,1,1,
+// 	0,1,1,1,
+// 	0,0,1,0
+// ]
+// console.log('chrom2')
+// console.log('decoded:', decodeChromosome(chrom2))
+// console.log('fitness:', fitness(chrom2, 42))
 
-// 1 / 0
-// = 1e12
-const chrom3: Bit[] = [
-	0,0,0,1,
-	1,1,0,1,
-	0,0,0,0
-]
-console.log('chrom3')
-console.log('decoded:', decodeChromosome(chrom3))
-console.log('fitness:', fitness(chrom3, 42))
+// // 1 / 0
+// // = 1e12
+// const chrom3: Bit[] = [
+// 	0,0,0,1,
+// 	1,1,0,1,
+// 	0,0,0,0
+// ]
+// console.log('chrom3')
+// console.log('decoded:', decodeChromosome(chrom3))
+// console.log('fitness:', fitness(chrom3, 42))
 
-// 6 * 7
-// = 42
-const chrom4: Bit[] = [
-	0,1,1,0,
-	1,1,0,0,
-	0,1,1,1
-]
-console.log('chrom4')
-console.log('decoded:', decodeChromosome(chrom4))
-console.log('fitness:', fitness(chrom4, 42))
+// // 6 * 7
+// // = 42
+// const chrom4: Bit[] = [
+// 	0,1,1,0,
+// 	1,1,0,0,
+// 	0,1,1,1
+// ]
+// console.log('chrom4')
+// console.log('decoded:', decodeChromosome(chrom4))
+// console.log('fitness:', fitness(chrom4, 42))
