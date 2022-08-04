@@ -69,10 +69,6 @@ const randomChromosome = (min: number, max: number): Chromosome => {
 	)(R.range(0, numGenes))
 }
 
-// function showChromosome(x: Chromosome): String {
-// 	return 
-// }
-
 export const genes = (x: Chromosome): Gene[] =>
 	R.splitEvery(geneLength, x)
 
@@ -82,6 +78,8 @@ export const isNumber = (x: Char): boolean =>
 export const isOperator = (x: Char): boolean =>
 	R.includes(x, ['+', '-', '*', '/'])
 
+// Evaluate a decoded chromosome
+// e.g., ['1', '+', '1'] = 2
 export const evaluate = (xs: Char[]): number => {
 	enum Token {
 		Operator,
@@ -94,14 +92,15 @@ export const evaluate = (xs: Char[]): number => {
 		Multiply,
 		Divide,
 	}
-
+	
 	const f = ([acc, op, tok]: [number, Operator, Token], x: Char): [number, Operator, Token] => {
 		if (R.equals(tok, Token.Number) && isNumber(x)) {
 			return (
 				op === Operator.Add ? [acc + Number(x), op, Token.Operator]
 					: op === Operator.Subtract ? [acc - Number(x), op, Token.Operator]
 					: op === Operator.Multiply ? [acc * Number(x), op, Token.Operator]
-					: [acc / Number(x), op, Token.Operator]
+				// For the purpose of the algorithm, make division by 0 result in a high number (not Infinity or NaN)
+					: (Number(x) === 0 ? [1e12, op, Token.Operator] : [acc / Number(x), op, Token.Operator])
 			)
 		} else if (R.equals(tok, Token.Operator) && isOperator(x)) {
 			return (
@@ -154,3 +153,12 @@ const chrom2: Bit[] = [
 	0,0,1,0
 ]
 console.log(decodeChromosome(chrom2))
+
+// 1 / 0
+// = 1e12
+const chrom3: Bit[] = [
+	0,0,0,1,
+	1,1,0,1,
+	0,0,0,0
+]
+console.log(decodeChromosome(chrom3))
