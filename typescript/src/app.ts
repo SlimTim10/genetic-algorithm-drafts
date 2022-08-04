@@ -53,13 +53,17 @@ const randomBit = (): Bit =>
 const randomGene = (): Gene =>
 	[randomBit(), randomBit(), randomBit(), randomBit()]
 
-// Inclusive
+// min <= result <= max
 const getRandomInt = (min: number, max: number): number => {
-  const x = Math.ceil(min)
-  const y = Math.floor(max)
-  return Math.floor(Math.random() * (y - x + 1) + x)
+	const x = Math.ceil(min)
+	const y = Math.floor(max)
+	return Math.floor(Math.random() * (y - x + 1) + x)
 }
 
+// min <= result < max
+const getRandomNumber = (min: number, max: number): number => (
+	Math.random() * (max - min) + min
+)
 
 const randomChromosome = (min: number, max: number): Chromosome => {
 	const numGenes = getRandomInt(min, max)
@@ -134,6 +138,99 @@ export const fitness = (x: Chromosome, target: number): number => {
 	)
 }
 
+const rouletteSelect = (
+	population: Chromosome[],
+	target: number
+): [Chromosome, Chromosome[]] => {
+	const fitnesses: number[] = R.map((x: Chromosome) => fitness(x, target), population)
+	const totalFitness: number = R.sum(fitnesses)
+	const cumulFitnesses: number[] = R.scan(R.add, 0, fitnesses)
+	
+	const r: number = getRandomNumber(0, totalFitness)
+	const pickIdx: number = R.findIndex((f: number) => f >= r, fitnesses)
+	const pick: Chromosome = population[pickIdx]
+	const newPopulation: Chromosome[] = R.remove(pickIdx, 1, population)
+	
+	return [pick, newPopulation]
+}
+
+const crossover = (
+	crossoverRate: number,
+	x: Chromosome,
+	y: Chromosome
+): [Chromosome, Chromosome] => {
+	// TODO
+
+	return [x, y]
+}
+
+const mutate = (
+	mutationRate: number,
+	x: Chromosome
+): Chromosome => {
+	// TODO
+
+	return x
+}
+
+const sortByFitness = (population: Chromosome[]): Chromosome[] => {
+	// TODO
+
+	return population
+}
+
+/*
+At the beginning of a run of a genetic algorithm a large population of random chromosomes is created. Each one, when decoded will represent a different solution to the problem at hand. Let's say there are N chromosomes in the initial population. Then, the following steps are repeated until a solution is found
+  1. Test each chromosome to see how good it is at solving the problem at hand and assign a fitness score accordingly. The fitness score is a measure of how good that chromosome is at solving the problem to hand.
+  2. Select two members from the current population. The chance of being selected is proportional to the chromosomes fitness. Roulette wheel selection is a commonly used method.
+  3. Dependent on the crossover rate crossover the bits from each chosen chromosome at a randomly chosen point.
+  4. Step through the chosen chromosomes bits and flip dependent on the mutation rate.
+  5. Repeat step 2, 3, 4 until a new population of N members has been created.
+*/
+const run = (
+	populationSize: number,
+	maxSteps: number,
+	target: number,
+	crossoverRate: number,
+	mutationRate: number
+): void => {
+	const initialPopulation: Chromosome[] = R.times((_: number) => randomChromosome(1, 40), populationSize)
+
+	const step = (population: Chromosome[], n: number): Chromosome[] => {
+		if (n >= maxSteps) return population
+
+		const newPopulation: Chromosome[] = R.flatten(R.unfold((pop: Chromosome[]) => {
+			if (R.isEmpty(pop)) return false
+			// Choose 2 chromosomes using roulette wheel
+			const [chrom1, pop_]: [Chromosome, Chromosome[]] = rouletteSelect(pop, target)
+			const [chrom2, pop__]: [Chromosome, Chromosome[]] = rouletteSelect(pop_, target)
+			// Apply crossover
+			const [chrom1C, chrom2C]: [Chromosome, Chromosome] = crossover(crossoverRate, chrom1, chrom2)
+			// Apply mutation
+			const chrom1M: Chromosome = mutate(mutationRate, chrom1C)
+			const chrom2M: Chromosome = mutate(mutationRate, chrom2C)
+			return [[chrom1M, chrom2M], pop__]
+		}, population))
+
+		return step(newPopulation, n + 1)
+	}
+
+	const finalPopulation: Chromosome[] = step(initialPopulation, 0)
+
+	const best: Chromosome = R.compose(
+		R.head,
+		R.reverse,
+		sortByFitness
+	)(finalPopulation)
+
+	console.log('BEST')
+	console.log('chromosome:', best)
+	console.log('=', decodeChromosome(best))
+	console.log('fitness:', fitness(best, target))
+}
+
+// run(10, 10, 42, 0.7, 0.001)
+
 // 6 + 5 * 4 / 2 + 1
 // = 23
 const chrom1: Bit[] = [
@@ -177,3 +274,14 @@ const chrom3: Bit[] = [
 console.log('chrom3')
 console.log('decoded:', decodeChromosome(chrom3))
 console.log('fitness:', fitness(chrom3, 42))
+
+// 6 * 7
+// = 42
+const chrom4: Bit[] = [
+	0,1,1,0,
+	1,1,0,0,
+	0,1,1,1
+]
+console.log('chrom4')
+console.log('decoded:', decodeChromosome(chrom4))
+console.log('fitness:', fitness(chrom4, 42))
