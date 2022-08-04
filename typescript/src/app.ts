@@ -78,7 +78,7 @@ export const isNumber = (x: Char): boolean =>
 export const isOperator = (x: Char): boolean =>
 	R.includes(x, ['+', '-', '*', '/'])
 
-// Evaluate a decoded chromosome
+// Evaluate a series of Chars
 // e.g., ['1', '+', '1'] = 2
 export const evaluate = (xs: Char[]): number => {
 	enum Token {
@@ -125,6 +125,15 @@ export const decodeChromosome = (x: Chromosome): number => (
 	)(x)
 )
 
+export const fitness = (x: Chromosome, target: number): number => {
+	const n = decodeChromosome(x)
+	return (
+		n === target
+			? 1e12
+			: (1 / Math.abs(target - n))
+	)
+}
+
 // 6 + 5 * 4 / 2 + 1
 // = 23
 const chrom1: Bit[] = [
@@ -138,7 +147,9 @@ const chrom1: Bit[] = [
 	1,0,1,0,
 	0,0,0,1
 ]
-console.log(decodeChromosome(chrom1))
+console.log('chrom1')
+console.log('decoded:', decodeChromosome(chrom1))
+console.log('fitness:', fitness(chrom1, 42))
 
 //  2 2 + n/a - 7 2
 // = 2 + 7
@@ -152,7 +163,9 @@ const chrom2: Bit[] = [
 	0,1,1,1,
 	0,0,1,0
 ]
-console.log(decodeChromosome(chrom2))
+console.log('chrom2')
+console.log('decoded:', decodeChromosome(chrom2))
+console.log('fitness:', fitness(chrom2, 42))
 
 // 1 / 0
 // = 1e12
@@ -161,4 +174,6 @@ const chrom3: Bit[] = [
 	1,1,0,1,
 	0,0,0,0
 ]
-console.log(decodeChromosome(chrom3))
+console.log('chrom3')
+console.log('decoded:', decodeChromosome(chrom3))
+console.log('fitness:', fitness(chrom3, 42))
