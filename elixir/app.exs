@@ -192,10 +192,34 @@ defmodule App do
 	finalPopulation = step.(step, initialPopulation, 0)
 	best = Enum.max_by(finalPopulation, fn chrom -> fitness(chrom, target) end)
 	
-	# IO.puts "best: " <> showChromosome(best)
-	# IO.puts "= " <> showCleanChromosome(best)
+	IO.puts "best: " <> showChromosome(best)
+	IO.puts "= " <> showCleanChromosome(best)
 	IO.puts "= " <> inspect(decodeChromosome(best))
 	IO.puts "fitness: " <> inspect(fitness(best, target))
+  end
+
+  def showChromosome(chrom) do
+	chrom
+	|> genes()
+	|> Enum.map(fn gene -> decodeGene(gene) end)
+	|> Enum.join(" ")
+  end
+
+  def showCleanChromosome(chrom) do
+	chars = Enum.map(genes(chrom), fn gene -> decodeGene(gene) end)
+	f = fn char, {acc, tok} ->
+	  cond do
+		tok == :number && isNumber(char) ->
+		  {acc ++ [char], :operator}
+		tok == :operator && isOperator(char) ->
+		  {acc ++ [char], :number}
+		true ->
+		  {acc, tok}
+	  end
+	end
+	Enum.reduce(chars, {[], :number}, f)
+	|> elem(0)
+	|> Enum.join(" ")
   end
 end
 
