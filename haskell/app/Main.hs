@@ -2,10 +2,12 @@ module Main where
 
 import Prelude hiding (Char)
 import Control.Monad (replicateM)
-import Data.List (foldl')
-
--- import qualified System.Random as Random
+import Data.List (foldl', maximumBy, intercalate)
+import Data.Function (on)
+import qualified Control.Monad.IO.Class as IO
+import qualified Data.List.Split as Split
 import qualified System.Random.Stateful as Random
+import qualified Control.Monad.Loops as CML
 
 data Bit = Bit0 | Bit1
   deriving (Show)
@@ -103,8 +105,8 @@ randomGene g = do
 randomChromosome
   :: (MonadFail m, Random.RandomGenM g r m)
   => g
-  -> Integer -- ^ min length, inclusive
-  -> Integer -- ^ max length, inclusive
+  -> Integer -- ^ Minimum length, inclusive
+  -> Integer -- ^ Maximum length, inclusive
   -> m Chromosome
 randomChromosome g x y = do
   len <- Random.uniformRM (x, y) g
@@ -112,6 +114,12 @@ randomChromosome g x y = do
 
 chromosomeBits :: Chromosome -> [Bit]
 chromosomeBits = concatMap (\(g1, g2, g3, g4) -> [g1, g2, g3, g4])
+
+bitsToChromosome :: [Bit] -> Chromosome
+bitsToChromosome = map f . Split.chunksOf geneLength
+  where
+    f [a, b, c, d] = (a, b, c, d)
+    f _ = error "Invalid gene length"
 
 isOperator :: Char -> Bool
 isOperator CharAdd = True
@@ -159,29 +167,131 @@ evaluate =
         in
           case x of
             CharAdd -> (acc, OpAdd, nextOp)
-            CharSub -> (acc, OpAdd, nextOp)
-            CharMul -> (acc, OpAdd, nextOp)
-            CharDiv -> (acc, OpAdd, nextOp)
+            CharSub -> (acc, OpSub, nextOp)
+            CharMul -> (acc, OpMul, nextOp)
+            CharDiv -> (acc, OpDiv, nextOp)
             _ -> (acc, op, tok)
       | otherwise = (acc, op, tok)
 
 decodeChromosome :: Chromosome -> Float
 decodeChromosome = evaluate . map decodeGene
 
-fitness :: Chromosome -> Float -> Float
-fitness chrom target
+fitness :: Float -> Chromosome -> Float
+fitness target chrom
   | n == target = highNumber
   | otherwise = 1 / abs (target - n)
   where n = decodeChromosome chrom
 
+rouletteSelect
+  :: (MonadFail m, Random.RandomGenM g r m)
+  => g
+  -> Float
+  -> [Chromosome]
+  -> m (Chromosome, [Chromosome])
+rouletteSelect g target population = do
+  r <- Random.uniformRM (0, totalFitness) g
+  let (xs, ys) = break (\(_, cf) -> cf >= r) $ zip population cumulFitnesses
+  let newPopulation = map fst xs <> map fst (tail ys)
+  pure (fst . head $ ys, newPopulation)
+  where
+    fitnesses = map (fitness target) population
+    totalFitness = sum fitnesses
+    cumulFitnesses = scanl1 (+) fitnesses
+
+crossover
+  :: (MonadFail m, Random.RandomGenM g r m)
+  => g
+  -> Float
+  -> Chromosome
+  -> Chromosome
+  -> m (Chromosome, Chromosome)
+crossover g crossoverRate x y = do
+  r <- Random.uniformRM (0 :: Float, 1 :: Float) g
+  if r <= crossoverRate
+    then
+    do
+      n <- Random.uniformRM (1, min (length x) (length y) - 1) g
+      let (xStart, xEnd) = splitAt n x
+      let (yStart, yEnd) = splitAt n y
+      let xNew = xStart <> yEnd
+      let yNew = yStart <> xEnd
+      pure (xNew, yNew)
+    else pure (x, y)
+
+mutate
+  :: (MonadFail m, Random.RandomGenM g r m)
+  => g
+  -> Float
+  -> Chromosome
+  -> m Chromosome
+mutate g mutationRate x = do
+  ys <- mapM f (chromosomeBits x)
+  pure $ bitsToChromosome ys
+  where
+    f b = do
+      r <- Random.uniformRM (0 :: Float, 1 :: Float) g
+      if r <= mutationRate
+        then pure $ flipBit b
+        else pure $ b
+    flipBit Bit0 = Bit1
+    flipBit Bit1 = Bit0
+
+{-
+At the beginning of a run of a genetic algorithm a large population of random chromosomes is created. Each one, when decoded will represent a different solution to the problem at hand. Let's say there are N chromosomes in the initial population. Then, the following steps are repeated until a solution is found
+  1. Test each chromosome to see how good it is at solving the problem at hand and assign a fitness score accordingly. The fitness score is a measure of how good that chromosome is at solving the problem to hand.
+  2. Select two members from the current population. The chance of being selected is proportional to the chromosomes fitness. Roulette wheel selection is a commonly used method.
+  3. Dependent on the crossover rate crossover the bits from each chosen chromosome at a randomly chosen point.
+  4. Step through the chosen chromosomes bits and flip dependent on the mutation rate.
+  5. Repeat step 2, 3, 4 until a new population of N members has been created.
+-}
+run
+  :: (MonadFail m, Random.RandomGenM g r m, IO.MonadIO m)
+  => g
+  -> Int -- ^ Population size
+  -> Int -- ^ Maximum steps
+  -> Float -- ^ Target number
+  -> Float -- ^ Crossover rate
+  -> Float -- ^ Mutation rate
+  -> m Chromosome
+run g popSize maxSteps target cr mr = do
+  initialPopulation <- replicateM popSize (randomChromosome g 1 20)
+  finalPopulation <- fmap head $ CML.unfoldrM step (initialPopulation, 0)
+  pure $ maximumBy (compare `on` fitness target) finalPopulation
+  where
+    step (pop, n)
+      | n >= maxSteps = pure Nothing
+      | otherwise = do
+          IO.liftIO . putStrLn $ "step: " <> show n
+          newPop <- fmap concat $ CML.unfoldrM addToPop pop
+          pure $ Just (newPop, (newPop, n + 1))
+    addToPop pop
+      | length pop < 2 = pure Nothing
+      | otherwise = do
+          (c1, pop') <- rouletteSelect g target pop
+          (c2, pop'') <- rouletteSelect g target pop'
+          (c1', c2') <- crossover g cr c1 c2
+          c1'' <- mutate g mr c1'
+          c2'' <- mutate g mr c2'
+          pure $ Just ([c1'', c2''], pop'')
+
+showChromosome :: Chromosome -> String
+showChromosome = intercalate " " . map (show . decodeGene)
+
+showCleanChromosome :: Chromosome -> String
+showCleanChromosome = error "TODO"
+
 main :: IO ()
 main = do
   putStrLn "chrom1"
-  print chrom1
-  print $ decodeChromosome chrom1
-  -- print $ fitness chrom1 42
-  
-  -- print $ evaluate chrom1
+  putStrLn $ showChromosome chrom1
+  putStrLn $ "= " <> show (decodeChromosome chrom1)
+  print $ fitness 42 chrom1
+
+  let target = 42
+  best <- run Random.globalStdGen 200 50 target 0.7 0.001
+  putStrLn $ "best: " <> showChromosome best
+  putStrLn $ "= " <> show (decodeChromosome best)
+  putStrLn $ "fitness: " <> show (fitness target best)
 
 -- 6 + 5 * 4 / 2 + 1
 -- = 23
