@@ -141,17 +141,17 @@ isDigit Char8 = True
 isDigit Char9 = True
 isDigit _ = False
 
-data Token = TokOperator | TokNumber
+data Token = TokOperator | TokDigit
   deriving (Eq)
 data Operator = OpAdd | OpSub | OpMul | OpDiv
 
 evaluate :: [Char] -> Float
 evaluate =
   (\(acc', _, _) -> acc')
-  . foldl' f (0 :: Float, OpAdd, TokNumber)
+  . foldl' f (0 :: Float, OpAdd, TokDigit)
   where
     f (acc, op, tok) x
-      | tok == TokNumber && isDigit x =
+      | tok == TokDigit && isDigit x =
         let
           nextOp = TokOperator
           n = (read . show $ x) :: Float
@@ -163,7 +163,7 @@ evaluate =
             -- For the purpose of the algorithm, make division by 0 result in a high number (not Infinity or NaN)
             OpDiv -> if n == 0 then (highNumber, op, nextOp) else (acc / n, op, nextOp)
       | tok == TokOperator && isOperator x =
-        let nextOp = TokNumber
+        let nextOp = TokDigit
         in
           case x of
             CharAdd -> (acc, OpAdd, nextOp)
@@ -278,7 +278,22 @@ showChromosome :: Chromosome -> String
 showChromosome = intercalate " " . map (show . decodeGene)
 
 showCleanChromosome :: Chromosome -> String
-showCleanChromosome = error "TODO"
+showCleanChromosome =
+  intercalate " "
+  . map show
+  . (\xs -> if isOperator (last xs) then init xs else xs)
+  . fst
+  . foldl' f ([], TokDigit)
+  where
+    f :: ([Char], Token) -> Gene -> ([Char], Token)
+    f (acc, tok) gene
+      | tok == TokDigit && isDigit x =
+        (acc <> [x], TokOperator)
+      | tok == TokOperator && isOperator x =
+        (acc <> [x], TokDigit)
+      | otherwise =
+        (acc, tok)
+      where x = decodeGene gene
 
 main :: IO ()
 main = do
@@ -286,10 +301,14 @@ main = do
   putStrLn $ showChromosome chrom1
   putStrLn $ "= " <> show (decodeChromosome chrom1)
   print $ fitness 42 chrom1
+  putStrLn ""
 
   let target = 42
-  best <- run Random.globalStdGen 200 50 target 0.7 0.001
-  putStrLn $ "best: " <> showChromosome best
+  putStrLn $ "target: " <> show target
+  best <- run Random.globalStdGen 200 20 target 0.7 0.001
+  putStrLn $ "best:"
+  putStrLn $ showChromosome best
+  putStrLn $ "= " <> showCleanChromosome best
   putStrLn $ "= " <> show (decodeChromosome best)
   putStrLn $ "fitness: " <> show (fitness target best)
 
