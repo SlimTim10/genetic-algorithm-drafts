@@ -7,6 +7,8 @@ const R = require('ramda')
 // Gene :: (Bit, Bit, Bit, Bit)
 // GeneType :: Number | Operator
 
+const highNumber = Math.pow(10, 12)
+
 const geneMap = {
   '0': [0,0,0,0],
   '1': [0,0,0,1],
@@ -84,22 +86,20 @@ const decode = x => {
         op === '+' ? acc + n
           : op === '-' ? acc - n
           : op === '*' ? acc * n
-          : op === '/' ? acc / n
+        // For the purpose of the algorithm, make division by 0 result in a high number (not Infinity or NaN)
+          : op === '/' ? (n === 0 ? highNumber : acc / n)
           : acc
       )
     }, Number(geneToChar(R.head(gs))))
 }
 
-// (Chromosome, Integer) -> Maybe Float
-const fitness = (chrom, target) => {
-  const x = R.compose(decode, clean)(chrom)
-  if (target - x === 0) return {
-    nothing: true
-  }
-  return {
-    nothing: false,
-    val: Math.abs(1 / (target - x))
-  }
+// (Number, Chromosome) -> Number
+const fitness = (target, chrom) => {
+  const n = R.compose(decode, clean)(chrom)
+  return (
+    n === target ? highNumber
+      : 1 / Math.abs(target - n)
+  )
 }
 
 // Return a random integer from x to y (inclusive)
@@ -118,45 +118,36 @@ const makeChromosome = () => {
   return gs.flat()
 }
 
-// [Chromosome] -> [Chromosome]
-const sortByFitness = R.sortBy(x => {
-  const f = fitness(x, target)
-  return f.nothing ? Infinity : f.val
-})
-
 // 
 // [Chromosome] -> (Chromosome, [Chromosome])
-const rouletteSelect = (population, target) => {
-  const s = R.compose(
-    R.sum,
-    R.map(x => fitness(x, target))
-  )(population)
-  const r = Math.random() * s
-  // const chosen = R.reduce(
-  //   (acc, x) => (console.log('---- x', x), acc <= 0) ? R.reduced(x) : (acc - fitness(x, target).val),
-  //   r,
-  //   population
-  // )
-  // const chosen = R.reduceWhile(
-  //   (acc, x) => (acc > 0) && !fitness(x, target).nothing,
-  //   (acc, x) => acc - fitness(x, target).val,
-  //   r,
-  //   population
-  // )
-  const cfs = R.scan(
-    _,
-    _,
-    R.map(x => fitness(x, target), population)
+const rouletteSelect = (target, population) => {
+  const fitnesses = R.map(R.curry(fitness)(target), population)
+  const totalFitness = R.sum(fitnesses)
+  const cumulFitnesses = R.tail(R.scan(R.add, 0, fitnesses))
+
+  const r = Math.random() * totalFitness
+  const [xs, ys] = R.splitWhen(
+    ([_, cf]) => cf >= r,
+    R.zip(population, cumulFitnesses)
   )
-  console.log('---- chosen:', chosen)
-  const newPopulation = R.without([chosen], population)
+  const newPopulation = [...R.map(R.head, xs), ...R.map(R.head, R.tail(ys))]
+  const chosen = R.head(R.head(ys))
   return [chosen, newPopulation]
 }
 
 // Float -> Chromosome -> Chromosome -> (Chromosome, Chromosome)
 const crossover = (crossoverRate, x, y) => {
-  // TODO
-  return (x, y)
+  const r = Math.random() * crossoverRate
+  if (r <= crossoverRate) {
+    const n = getRandomInt(1, Math.min(x.length, y.length) - 1)
+    const [xStart, xEnd] = R.splitAt(n, x)
+    const [yStart, yEnd] = R.splitAt(n, y)
+    const xNew = [...xStart, ...yEnd]
+    const yNew = [...yStart, ...xEnd]
+    return (xNew, yNew)
+  } else {
+    return (x, y)
+  }
 }
 
 // Float -> Chromosome -> Chromosome
@@ -180,17 +171,11 @@ const run = (populationSize, maxSteps, target, crossoverRate, mutationRate) => {
     console.log('step:', n)
     if (n > maxSteps) return population
 
-    console.log('population:', population)
-    
     const newPopulation = R.flatten(R.unfold(pop => {
-      console.log('-- pop length:', pop.length)
       if (R.isEmpty(pop)) return false
       // Choose 2 chromosomes using roulette wheel
-      const [chrom1, pop_] = rouletteSelect(pop, target)
-      console.log('-- chrom1:', chrom1)
-      console.log('-- pop_ length:', pop_.length)
-      const [chrom2, pop__] = rouletteSelect(pop_, target)
-      console.log('-- chrom2:', chrom2)
+      const [chrom1, pop_] = rouletteSelect(target, pop)
+      const [chrom2, pop__] = rouletteSelect(target, pop_)
       // Apply crossover
       const [chrom1C, chrom2C] = crossover(crossoverRate, chrom1, chrom2)
       // Apply mutation
@@ -198,7 +183,6 @@ const run = (populationSize, maxSteps, target, crossoverRate, mutationRate) => {
       const chrom2M = mutate(mutationRate, chrom2C)
       return [[chrom1M, chrom2M], pop__]
     }, population))
-    console.log('newPopulation:', newPopulation)
     
     return step(newPopulation, n + 1)
   }
@@ -209,7 +193,7 @@ const run = (populationSize, maxSteps, target, crossoverRate, mutationRate) => {
   const best = R.compose(
     R.head,
     R.reverse,
-    sortByFitness
+    R.sortBy(R.curry(fitness)(target))
   )(finalPopulation)
   
   console.log('BEST')
@@ -217,7 +201,7 @@ const run = (populationSize, maxSteps, target, crossoverRate, mutationRate) => {
   console.log(show(best))
   console.log('=', R.compose(show, clean)(best))
   console.log('=', decode(best))
-  console.log('fitness:', fitness(best, target))
+  console.log('fitness:', fitness(target, best))
 }
 
 run(10, 10, 42, 0.7, 0.001)
