@@ -1,4 +1,4 @@
-const R = require('ramda')
+import * as R from 'ramda'
 
 type Bit = 0 | 1
 type Gene = [Bit, Bit, Bit, Bit]
@@ -73,8 +73,14 @@ const randomChromosome = (min: number, max: number): Chromosome => {
 	)(R.range(0, numGenes))
 }
 
-export const genes = (x: Chromosome): Gene[] =>
-	R.splitEvery(geneLength, x)
+export const genes = (x: Chromosome): Gene[] => {
+	if (R.length(x) < geneLength) return []
+	const parts = R.splitEvery(geneLength, x)
+	return R.map(part => (
+		R.length(part) < geneLength ? [0,0,0,0]
+			: [part[0], part[1], part[2], part[3]]
+	), parts)
+}
 
 export const isNumber = (x: Char): boolean =>
 	R.includes(x, ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'])
@@ -256,7 +262,13 @@ const run = (
 	}
 
 	const finalPopulation: Chromosome[] = step(initialPopulation, 0)
-	const best: Chromosome = R.reduce(R.maxBy((x: Chromosome) => fitness(x, target)), 0, finalPopulation)
+	const best: Chromosome = R.reduce(
+		R.maxBy((x: Chromosome) => fitness(x, target)),
+		finalPopulation[0],
+		finalPopulation
+	)
+
+	if (best === undefined) return;
 
 	console.log('best:', best)
 	console.log(showChromosome(best))
