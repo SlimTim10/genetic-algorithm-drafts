@@ -57,11 +57,6 @@ defmodule App do
 	numGenes = Enum.random(min..max)
 	Enum.to_list(0..numGenes)
 	|> Enum.map(fn _ -> randomGene() end)
-	|> List.flatten()
-  end
-
-  def genes(chrom) do
-	Enum.chunk_every(chrom, 4)
   end
 
   def isNumber(char) do
@@ -103,7 +98,6 @@ defmodule App do
 
   def decodeChromosome(chrom) do
 	chrom
-	|> genes()
 	|> Enum.map(fn gene -> decodeGene(gene) end)
 	|> evaluate()
   end
@@ -135,25 +129,27 @@ defmodule App do
 	r = getRandomNumber(0, 1)
 	cond do
 	  r <= crossoverRate ->
-		xg = genes(x)
-		yg = genes(y)
-		idx = Enum.random(1..(Kernel.min(length(xg), length(yg)) - 1))
-		{xStart, xEnd} = Enum.split(xg, idx)
-		{yStart, yEnd} = Enum.split(yg, idx)
-		xNew = List.flatten([xStart, yEnd])
-		yNew = List.flatten([yStart, xEnd])
+		idx = Enum.random(1..(Kernel.min(length(x), length(y)) - 1))
+		{xStart, xEnd} = Enum.split(x, idx)
+		{yStart, yEnd} = Enum.split(y, idx)
+		xNew = flatten1([xStart, yEnd])
+		yNew = flatten1([yStart, xEnd])
 		{xNew, yNew}
 	  true ->
 		{x, y}
 	end
   end
 
-  def mutate(mutationRate, chrom) do
+  def mutateGene(mutationRate, gene) do
 	flip = fn bit -> if bit == 0, do: 1, else: 0 end
-	Enum.map(chrom, fn bit ->
+	Enum.map(gene, fn bit ->
 	  r = getRandomNumber(0, 1)
 	  if r <= mutationRate, do: flip.(bit), else: bit
 	end)
+  end
+
+  def mutate(mutationRate, chrom) do
+	Enum.map(chrom, fn gene -> mutateGene(mutationRate, gene) end)
   end
 
   # [[1, 2, 3], [4, 5, 6]] -> [1, 2, 3, 4, 5, 6]
@@ -171,7 +167,7 @@ defmodule App do
 	initialPopulation = Enum.map(
 	  1..populationSize,
 	  fn _ -> randomChromosome(1, 20) end)
-	
+
 	step = fn
 	  _f, population, n when n >= maxSteps -> population
 	  f, population, n ->
@@ -185,7 +181,8 @@ defmodule App do
 			{chrom1M, chrom2M} = {mutate(mutationRate, chrom1C), mutate(mutationRate, chrom2C)}
 			{[chrom1M, chrom2M], pop__}
 		end
-		newPopulation = Stream.unfold(population, addToPop) |> Enum.to_list() |> flatten1()
+		newPopulation =
+		  Stream.unfold(population, addToPop) |> Enum.to_list() |> flatten1()
 		f.(f, newPopulation, n + 1)
 	end
 	
@@ -200,13 +197,12 @@ defmodule App do
 
   def showChromosome(chrom) do
 	chrom
-	|> genes()
 	|> Enum.map(fn gene -> decodeGene(gene) end)
 	|> Enum.join(" ")
   end
 
   def showCleanChromosome(chrom) do
-	chars = Enum.map(genes(chrom), fn gene -> decodeGene(gene) end)
+	chars = Enum.map(chrom, fn gene -> decodeGene(gene) end)
 	f = fn char, {acc, tok} ->
 	  cond do
 		tok == :number && isNumber(char) ->
@@ -226,15 +222,15 @@ end
 # 6 + 5 * 4 / 2 + 1
 # = 23
 chrom1 = [
-	0,1,1,0,
-	1,0,1,0,
-	0,1,0,1,
-	1,1,0,0,
-	0,1,0,0,
-	1,1,0,1,
-	0,0,1,0,
-	1,0,1,0,
-	0,0,0,1
+	[0,1,1,0],
+	[1,0,1,0],
+	[0,1,0,1],
+	[1,1,0,0],
+	[0,1,0,0],
+	[1,1,0,1],
+	[0,0,1,0],
+	[1,0,1,0],
+	[0,0,0,1]
 ]
 IO.puts "chrom1"
 IO.inspect chrom1
@@ -245,13 +241,13 @@ IO.inspect App.fitness(chrom1, 42)
 # = 2 + 7
 # = 9
 chrom2 = [
-  0,0,1,0,
-  0,0,1,0,
-  1,0,1,0,
-  1,1,1,0,
-  1,0,1,1,
-  0,1,1,1,
-  0,0,1,0
+  [0,0,1,0],
+  [0,0,1,0],
+  [1,0,1,0],
+  [1,1,1,0],
+  [1,0,1,1],
+  [0,1,1,1],
+  [0,0,1,0]
 ]
 IO.puts "chrom2"
 IO.inspect chrom2
@@ -261,9 +257,9 @@ IO.inspect App.fitness(chrom2, 42)
 # 1 / 0
 # = 10^12
 chrom3 = [
-  0,0,0,1,
-  1,1,0,1,
-  0,0,0,0
+  [0,0,0,1],
+  [1,1,0,1],
+  [0,0,0,0]
 ]
 IO.puts "chrom3"
 IO.inspect chrom3
@@ -273,13 +269,13 @@ IO.inspect App.fitness(chrom3, 42)
 # 6 * 7
 # = 42
 chrom4 = [
-  0,1,1,0,
-  1,1,0,0,
-  0,1,1,1
+  [0,1,1,0],
+  [1,1,0,0],
+  [0,1,1,1]
 ]
 IO.puts "chrom4"
 IO.inspect chrom4
 IO.inspect App.decodeChromosome(chrom4)
 IO.inspect App.fitness(chrom4, 42)
 
-IO.inspect App.run(200, 20, 42, 0.7, 0.001)
+IO.inspect App.run(100, 20, 42, 0.7, 0.001)
