@@ -2,7 +2,11 @@ import * as R from 'ramda'
 
 type Bit = 0 | 1
 type Gene = [Bit, Bit, Bit, Bit]
-type Chromosome = Gene[]
+type Chromosome = {
+	genes: Gene[]
+	fitness: number
+	target: number
+}
 type Char = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '+' | '-' | '*' | '/' | 'n/a'
 
 const geneLength = 4
@@ -65,9 +69,15 @@ const getRandomNumber = (min: number, max: number): number => (
 	Math.random() * (max - min) + min
 )
 
-const randomChromosome = (min: number, max: number): Chromosome => {
+const randomChromosome = (min: number, max: number, target: number): Chromosome => {
 	const numGenes = getRandomInt(min, max)
-	return R.map(randomGene, R.range(0, numGenes))
+	const genes = R.map(randomGene, R.range(0, numGenes))
+	const fitness = calcFitness(genes, target)
+	return {
+		genes,
+		fitness,
+		target
+	}
 }
 
 export const isNumber = (x: Char): boolean =>
@@ -115,15 +125,15 @@ export const evaluate = (xs: Char[]): number => {
 	return R.reduce(f, [0, Operator.Add, Token.Number], xs)[0]
 }
 
-export const decodeChromosome = (x: Chromosome): number => (
+export const decodeGenes = (genes: Gene[]): number => (
 	R.compose(
 		evaluate,
 		R.map(decodeGene)
-	)(x)
+	)(genes)
 )
 
-export const fitness = (x: Chromosome, target: number): number => {
-	const n = decodeChromosome(x)
+export const calcFitness = (genes: Gene[], target: number): number => {
+	const n = decodeGenes(genes)
 	return (
 		n === target
 			? 1e12
@@ -135,7 +145,7 @@ const rouletteSelect = (
 	population: Chromosome[],
 	target: number
 ): [Chromosome, Chromosome[]] => {
-	const fitnesses: number[] = R.map((x: Chromosome) => fitness(x, target), population)
+	const fitnesses: number[] = R.map((x: Chromosome) => x.fitness, population)
 	const totalFitness: number = R.sum(fitnesses)
 	const cumulFitnesses: number[] = R.tail(R.scan(R.add, 0, fitnesses))
 	
@@ -154,12 +164,15 @@ const crossover = (
 ): [Chromosome, Chromosome] => {
 	const r: number = getRandomNumber(0, 1)
 	if (r <= crossoverRate) {
-		const idx: number = getRandomInt(1, R.min(R.length(x), R.length(y)) - 1)
-		const [xStart, xEnd]: [Gene[], Gene[]] = R.splitAt(idx, x)
-		const [yStart, yEnd]: [Gene[], Gene[]] = R.splitAt(idx, y)
-		const xNew: Chromosome = [...xStart, ...yEnd]
-		const yNew: Chromosome = [...yStart, ...xEnd]
-		return [xNew, yNew]
+		const idx: number = getRandomInt(1, R.min(R.length(x.genes), R.length(y.genes)) - 1)
+		const [xStart, xEnd]: [Gene[], Gene[]] = R.splitAt(idx, x.genes)
+		const [yStart, yEnd]: [Gene[], Gene[]] = R.splitAt(idx, y.genes)
+		const xNew: Gene[] = [...xStart, ...yEnd]
+		const yNew: Gene[] = [...yStart, ...xEnd]
+		return [
+			{genes: xNew, fitness: calcFitness(xNew, x.target), target: x.target},
+			{genes: yNew, fitness: calcFitness(yNew, y.target), target: y.target}
+		]
 	} else {
 		return [x, y]
 	}
@@ -177,17 +190,22 @@ const mutateGene = (mutationRate: number, x: Gene): Gene => {
 const mutate = (
 	mutationRate: number,
 	x: Chromosome
-): Chromosome => (
-	R.map(R.curry(mutateGene)(mutationRate), x)
-)
+): Chromosome => {
+	const newGenes = R.map(gene => mutateGene(mutationRate, gene), x.genes)
+	return {
+		genes: newGenes,
+		fitness: calcFitness(newGenes, x.target),
+		target: x.target
+	}
+}
 
 export const showChromosome = (x: Chromosome): string => R.compose(
 	R.join(' '),
 	R.map(decodeGene)
-)(x)
+)(x.genes)
 
 export const showCleanChromosome = (x: Chromosome): string => {
-	const cs: Char[] = R.map(decodeGene, x)
+	const cs: Char[] = R.map(decodeGene, x.genes)
 	const f = ([acc, tok]: [Char[], Token], x: Char): [Char[], Token] => {
 		if (R.equals(tok, Token.Number) && isNumber(x)) {
 			return [[...acc, x], Token.Operator]
@@ -217,7 +235,7 @@ const run = (
 	crossoverRate: number,
 	mutationRate: number
 ): void => {
-	const initialPopulation: Chromosome[] = R.times((_: number) => randomChromosome(1, 20), populationSize)
+	const initialPopulation: Chromosome[] = R.times((_: number) => randomChromosome(1, 20, target), populationSize)
 
 	const step = (population: Chromosome[], n: number): Chromosome[] => {
 		console.log('step:', n)
@@ -245,7 +263,7 @@ const run = (
 
 	const finalPopulation: Chromosome[] = step(initialPopulation, 0)
 	const best: Chromosome = R.reduce(
-		R.maxBy((x: Chromosome) => fitness(x, target)),
+		R.maxBy((x: Chromosome) => x.fitness),
 		finalPopulation[0],
 		finalPopulation
 	)
@@ -253,8 +271,8 @@ const run = (
 	console.log('best:', best)
 	console.log(showChromosome(best))
 	console.log('=', showCleanChromosome(best))
-	console.log('=', decodeChromosome(best))
-	console.log('fitness:', fitness(best, target))
+	console.log('=', decodeGenes(best.genes))
+	console.log('fitness:', best.fitness)
 }
 
 run(100, 20, 42, 0.7, 0.001)
