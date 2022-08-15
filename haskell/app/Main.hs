@@ -12,7 +12,11 @@ import qualified Control.Monad.Loops as CML
 data Bit = Bit0 | Bit1
   deriving (Show)
 type Gene = (Bit, Bit, Bit, Bit)
-type Chromosome = [Gene]
+data Chromosome = Chromosome
+  { genes :: [Gene]
+  , fitness :: Float
+  , target :: Float
+  }
 data Char
   = Char0
   | Char1
@@ -107,19 +111,33 @@ randomChromosome
   => g
   -> Integer -- ^ Minimum length, inclusive
   -> Integer -- ^ Maximum length, inclusive
+  -> Float -- ^ Target number
   -> m Chromosome
-randomChromosome g x y = do
+randomChromosome g x y trg = do
   len <- Random.uniformRM (x, y) g
-  replicateM (fromIntegral len) (randomGene g)
+  gs <- replicateM (fromIntegral len) (randomGene g)
+  return Chromosome
+    { genes = gs
+    , fitness = calcFitness trg gs
+    , target = trg
+    }
 
 chromosomeBits :: Chromosome -> [Bit]
-chromosomeBits = concatMap (\(g1, g2, g3, g4) -> [g1, g2, g3, g4])
+chromosomeBits = concatMap (\(g1, g2, g3, g4) -> [g1, g2, g3, g4]) . genes
 
-bitsToChromosome :: [Bit] -> Chromosome
-bitsToChromosome = map f . Split.chunksOf geneLength
+bitsToChromosome
+  :: Float -- ^ Target
+  -> [Bit] -- ^ Bits
+  -> Chromosome
+bitsToChromosome trg bs = Chromosome
+  { genes = gs
+  , fitness = calcFitness trg gs
+  , target = trg
+  }
   where
     f [a, b, c, d] = (a, b, c, d)
     f _ = error "Invalid gene length"
+    gs = map f . Split.chunksOf geneLength $ bs
 
 isOperator :: Char -> Bool
 isOperator CharAdd = True
@@ -173,60 +191,65 @@ evaluate =
             _ -> (acc, op, tok)
       | otherwise = (acc, op, tok)
 
-decodeChromosome :: Chromosome -> Float
-decodeChromosome = evaluate . map decodeGene
+decodeGenes :: [Gene] -> Float
+decodeGenes = evaluate . map decodeGene
 
-fitness :: Float -> Chromosome -> Float
-fitness target chrom
-  | n == target = highNumber
-  | otherwise = 1 / abs (target - n)
-  where n = decodeChromosome chrom
+calcFitness
+  :: Float -- ^ Target
+  -> [Gene] -- ^ Genes
+  -> Float -- ^ Fitness
+calcFitness trg gs
+  | n == trg = highNumber
+  | otherwise = 1 / abs (trg - n)
+  where n = decodeGenes gs
 
 rouletteSelect
   :: (MonadFail m, Random.RandomGenM g r m)
   => g
-  -> Float
   -> [Chromosome]
   -> m (Chromosome, [Chromosome])
-rouletteSelect g target population = do
+rouletteSelect g population = do
   r <- Random.uniformRM (0, totalFitness) g
   let (xs, ys) = break (\(_, cf) -> cf >= r) $ zip population cumulFitnesses
   let newPopulation = map fst xs <> map fst (tail ys)
   pure (fst . head $ ys, newPopulation)
   where
-    fitnesses = map (fitness target) population
+    fitnesses = map fitness population
     totalFitness = sum fitnesses
     cumulFitnesses = scanl1 (+) fitnesses
 
 crossover
   :: (MonadFail m, Random.RandomGenM g r m)
   => g
-  -> Float
-  -> Chromosome
-  -> Chromosome
+  -> Float -- ^ Crossover rate
+  -> Chromosome -- ^ First chromosome
+  -> Chromosome -- ^ Second chromosome
   -> m (Chromosome, Chromosome)
 crossover g crossoverRate x y = do
   r <- Random.uniformRM (0 :: Float, 1 :: Float) g
   if r <= crossoverRate
     then
     do
-      n <- Random.uniformRM (1, min (length x) (length y) - 1) g
-      let (xStart, xEnd) = splitAt n x
-      let (yStart, yEnd) = splitAt n y
+      n <- Random.uniformRM (1, min (length . genes $ x) (length . genes $ y) - 1) g
+      let (xStart, xEnd) = splitAt n (genes x)
+      let (yStart, yEnd) = splitAt n (genes y)
       let xNew = xStart <> yEnd
       let yNew = yStart <> xEnd
-      pure (xNew, yNew)
+      pure
+        ( Chromosome xNew (calcFitness (target x) xNew) (target x)
+        , Chromosome yNew (calcFitness (target y) yNew) (target y)
+        )
     else pure (x, y)
 
 mutate
   :: (MonadFail m, Random.RandomGenM g r m)
   => g
-  -> Float
-  -> Chromosome
+  -> Float -- ^ Mutation rate
+  -> Chromosome -- ^ Chromosome to mutate
   -> m Chromosome
 mutate g mutationRate x = do
   ys <- mapM f (chromosomeBits x)
-  pure $ bitsToChromosome ys
+  pure $ bitsToChromosome (target x) ys
   where
     f b = do
       r <- Random.uniformRM (0 :: Float, 1 :: Float) g
@@ -253,10 +276,10 @@ run
   -> Float -- ^ Crossover rate
   -> Float -- ^ Mutation rate
   -> m Chromosome
-run g popSize maxSteps target cr mr = do
-  initialPopulation <- replicateM popSize (randomChromosome g 1 20)
+run g popSize maxSteps trg cr mr = do
+  initialPopulation <- replicateM popSize (randomChromosome g 1 40 trg)
   finalPopulation <- fmap head $ CML.unfoldrM step (initialPopulation, 0)
-  pure $ maximumBy (compare `on` fitness target) finalPopulation
+  pure $ maximumBy (compare `on` fitness) finalPopulation
   where
     step (pop, n)
       | n >= maxSteps = pure Nothing
@@ -267,15 +290,15 @@ run g popSize maxSteps target cr mr = do
     addToPop pop
       | length pop < 2 = pure Nothing
       | otherwise = do
-          (c1, pop') <- rouletteSelect g target pop
-          (c2, pop'') <- rouletteSelect g target pop'
+          (c1, pop') <- rouletteSelect g pop
+          (c2, pop'') <- rouletteSelect g pop'
           (c1', c2') <- crossover g cr c1 c2
           c1'' <- mutate g mr c1'
           c2'' <- mutate g mr c2'
           pure $ Just ([c1'', c2''], pop'')
 
 showChromosome :: Chromosome -> String
-showChromosome = intercalate " " . map (show . decodeGene)
+showChromosome = intercalate " " . map (show . decodeGene) . genes
 
 showCleanChromosome :: Chromosome -> String
 showCleanChromosome =
@@ -284,6 +307,7 @@ showCleanChromosome =
   . (\xs -> if isOperator (last xs) then init xs else xs)
   . fst
   . foldl' f ([], TokDigit)
+  . genes
   where
     f :: ([Char], Token) -> Gene -> ([Char], Token)
     f (acc, tok) gene
@@ -299,30 +323,34 @@ main :: IO ()
 main = do
   putStrLn "chrom1"
   putStrLn $ showChromosome chrom1
-  putStrLn $ "= " <> show (decodeChromosome chrom1)
-  print $ fitness 42 chrom1
+  putStrLn $ "= " <> show (decodeGenes . genes $ chrom1)
+  print $ fitness chrom1
   putStrLn ""
 
-  let target = 42
-  putStrLn $ "target: " <> show target
-  best <- run Random.globalStdGen 200 20 target 0.7 0.001
+  let trg = 42
+  putStrLn $ "target: " <> show trg
+  best <- run Random.globalStdGen 500 20 trg 0.7 0.001
   putStrLn $ "best:"
   putStrLn $ showChromosome best
   putStrLn $ "= " <> showCleanChromosome best
-  putStrLn $ "= " <> show (decodeChromosome best)
-  putStrLn $ "fitness: " <> show (fitness target best)
+  putStrLn $ "= " <> show (decodeGenes . genes $ best)
+  putStrLn $ "fitness: " <> show (fitness best)
 
 -- 6 + 5 * 4 / 2 + 1
 -- = 23
 chrom1 :: Chromosome
-chrom1 =
-  [ (Bit0,Bit1,Bit1,Bit0)
-  , (Bit1,Bit0,Bit1,Bit0)
-  , (Bit0,Bit1,Bit0,Bit1)
-  , (Bit1,Bit1,Bit0,Bit0)
-  , (Bit0,Bit1,Bit0,Bit0)
-  , (Bit1,Bit1,Bit0,Bit1)
-  , (Bit0,Bit0,Bit1,Bit0)
-  , (Bit1,Bit0,Bit1,Bit0)
-  , (Bit0,Bit0,Bit0,Bit1)
-  ]
+chrom1 = Chromosome
+  { genes =
+    [ (Bit0,Bit1,Bit1,Bit0)
+    , (Bit1,Bit0,Bit1,Bit0)
+    , (Bit0,Bit1,Bit0,Bit1)
+    , (Bit1,Bit1,Bit0,Bit0)
+    , (Bit0,Bit1,Bit0,Bit0)
+    , (Bit1,Bit1,Bit0,Bit1)
+    , (Bit0,Bit0,Bit1,Bit0)
+    , (Bit1,Bit0,Bit1,Bit0)
+    , (Bit0,Bit0,Bit0,Bit1)
+    ]
+  , fitness = 0
+  , target = 42
+  }
