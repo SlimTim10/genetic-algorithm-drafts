@@ -2,7 +2,7 @@ import * as R from 'ramda'
 
 type Bit = 0 | 1
 type Gene = [Bit, Bit, Bit, Bit]
-type Chromosome = Bit[]
+type Chromosome = Gene[]
 type Char = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '+' | '-' | '*' | '/' | 'n/a'
 
 const geneLength = 4
@@ -67,19 +67,7 @@ const getRandomNumber = (min: number, max: number): number => (
 
 const randomChromosome = (min: number, max: number): Chromosome => {
 	const numGenes = getRandomInt(min, max)
-	return R.compose(
-		R.flatten,
-		R.map(randomGene)
-	)(R.range(0, numGenes))
-}
-
-export const genes = (x: Chromosome): Gene[] => {
-	if (R.length(x) < geneLength) return []
-	const parts = R.splitEvery(geneLength, x)
-	return R.map(part => (
-		R.length(part) < geneLength ? [0,0,0,0]
-			: [part[0], part[1], part[2], part[3]]
-	), parts)
+	return R.map(randomGene, R.range(0, numGenes))
 }
 
 export const isNumber = (x: Char): boolean =>
@@ -130,8 +118,7 @@ export const evaluate = (xs: Char[]): number => {
 export const decodeChromosome = (x: Chromosome): number => (
 	R.compose(
 		evaluate,
-		R.map(decodeGene),
-		genes
+		R.map(decodeGene)
 	)(x)
 )
 
@@ -167,45 +154,40 @@ const crossover = (
 ): [Chromosome, Chromosome] => {
 	const r: number = getRandomNumber(0, 1)
 	if (r <= crossoverRate) {
-		const xg: Gene[] = genes(x)
-		const yg: Gene[] = genes(y)
-		const idx: number = getRandomInt(1, R.min(R.length(xg), R.length(yg)) - 1)
-		const [xStart, xEnd]: [Gene[], Gene[]] = R.splitAt(idx, xg)
-		const [yStart, yEnd]: [Gene[], Gene[]] = R.splitAt(idx, yg)
-		const xNew: Chromosome = R.flatten([xStart, yEnd])
-		const yNew: Chromosome = R.flatten([yStart, xEnd])
+		const idx: number = getRandomInt(1, R.min(R.length(x), R.length(y)) - 1)
+		const [xStart, xEnd]: [Gene[], Gene[]] = R.splitAt(idx, x)
+		const [yStart, yEnd]: [Gene[], Gene[]] = R.splitAt(idx, y)
+		const xNew: Chromosome = [...xStart, ...yEnd]
+		const yNew: Chromosome = [...yStart, ...xEnd]
 		return [xNew, yNew]
 	} else {
 		return [x, y]
 	}
 }
 
+const mutateGene = (mutationRate: number, x: Gene): Gene => {
+	const flip = (b: Bit): Bit => b === 0 ? 1 : 0
+	const genes = R.map((b: Bit) => {
+		const r: number = getRandomNumber(0, 1)
+		return r <= mutationRate ? flip(b) : b
+	}, x)
+	return [genes[0], genes[1], genes[2], genes[3]]
+}
+
 const mutate = (
 	mutationRate: number,
 	x: Chromosome
-): Chromosome => {
-	const flip = (b: Bit): Bit => b === 0 ? 1 : 0
-	return R.map((b: Bit) => {
-		const r: number = getRandomNumber(0, 1)
-		if (r <= mutationRate) {
-			return flip(b)
-		} else {
-			return b
-		}
-	}, x)
-}
+): Chromosome => (
+	R.map(R.curry(mutateGene)(mutationRate), x)
+)
 
 export const showChromosome = (x: Chromosome): string => R.compose(
 	R.join(' '),
-	R.map(decodeGene),
-	genes
+	R.map(decodeGene)
 )(x)
 
 export const showCleanChromosome = (x: Chromosome): string => {
-	const cs: Char[] = R.compose(
-		R.map(decodeGene),
-		genes
-	)(x)
+	const cs: Char[] = R.map(decodeGene, x)
 	const f = ([acc, tok]: [Char[], Token], x: Char): [Char[], Token] => {
 		if (R.equals(tok, Token.Number) && isNumber(x)) {
 			return [[...acc, x], Token.Operator]
@@ -267,8 +249,6 @@ const run = (
 		finalPopulation[0],
 		finalPopulation
 	)
-
-	if (best === undefined) return;
 
 	console.log('best:', best)
 	console.log(showChromosome(best))
