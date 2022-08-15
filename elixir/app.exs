@@ -53,10 +53,15 @@ defmodule App do
 	Enum.map(Enum.to_list(1..@geneLength), fn _ -> randomBit() end)
   end
 
-  def randomChromosome(min, max) do
+  def randomChromosome(min, max, target) do
 	numGenes = Enum.random(min..max)
-	Enum.to_list(0..numGenes)
+	genes = Enum.to_list(0..numGenes)
 	|> Enum.map(fn _ -> randomGene() end)
+	%{
+	  :genes => genes,
+	  :fitness => calcFitness(genes, target),
+	  :target => target
+	}
   end
 
   def isNumber(char) do
@@ -96,14 +101,14 @@ defmodule App do
 	|> elem(0)
   end
 
-  def decodeChromosome(chrom) do
-	chrom
+  def decodeGenes(genes) do
+	genes
 	|> Enum.map(fn gene -> decodeGene(gene) end)
 	|> evaluate()
   end
 
-  def fitness(chrom, target) do
-	n = decodeChromosome(chrom)
+  def calcFitness(genes, target) do
+	n = decodeGenes(genes)
 	if n == target do
 	  @highNumber
 	else
@@ -116,8 +121,8 @@ defmodule App do
 	:rand.uniform() * (max - min) + min
   end
 
-  def rouletteSelect(population, target) do
-	fitnesses = Enum.map(population, fn chrom -> fitness(chrom, target) end)
+  def rouletteSelect(population) do
+	fitnesses = Enum.map(population, fn chrom -> chrom.fitness end)
 	totalFitness = Enum.sum(fitnesses)
 	cumulFitnesses = fitnesses |> Kernel.tl() |> Enum.scan(0, &(&1 + &2))
 	r = getRandomNumber(0, totalFitness)
@@ -129,12 +134,23 @@ defmodule App do
 	r = getRandomNumber(0, 1)
 	cond do
 	  r <= crossoverRate ->
-		idx = Enum.random(1..(Kernel.min(length(x), length(y)) - 1))
-		{xStart, xEnd} = Enum.split(x, idx)
-		{yStart, yEnd} = Enum.split(y, idx)
+		idx = Enum.random(1..(Kernel.min(length(x.genes), length(y.genes)) - 1))
+		{xStart, xEnd} = Enum.split(x.genes, idx)
+		{yStart, yEnd} = Enum.split(y.genes, idx)
 		xNew = flatten1([xStart, yEnd])
 		yNew = flatten1([yStart, xEnd])
-		{xNew, yNew}
+		{
+		  %{
+			:genes => xNew,
+			:fitness => calcFitness(xNew, x.target),
+			:target => x.target
+		  },
+		  %{
+			:genes => yNew,
+			:fitness => calcFitness(yNew, y.target),
+			:target => y.target
+		  }
+		}
 	  true ->
 		{x, y}
 	end
@@ -149,7 +165,12 @@ defmodule App do
   end
 
   def mutate(mutationRate, chrom) do
-	Enum.map(chrom, fn gene -> mutateGene(mutationRate, gene) end)
+	newGenes = Enum.map(chrom.genes, fn gene -> mutateGene(mutationRate, gene) end)
+	%{
+	  :genes => newGenes,
+	  :fitness => calcFitness(newGenes, chrom.target),
+	  :target => chrom.target
+	}
   end
 
   # [[1, 2, 3], [4, 5, 6]] -> [1, 2, 3, 4, 5, 6]
@@ -166,7 +187,7 @@ defmodule App do
   def run(populationSize, maxSteps, target, crossoverRate, mutationRate) do
 	initialPopulation = Enum.map(
 	  1..populationSize,
-	  fn _ -> randomChromosome(1, 20) end)
+	  fn _ -> randomChromosome(1, 20, target) end)
 
 	step = fn
 	  _f, population, n when n >= maxSteps -> population
@@ -175,8 +196,8 @@ defmodule App do
 		addToPop = fn
 		  pop when length(pop) < 2 -> nil
 		  pop ->
-			{chrom1, pop_} = rouletteSelect(pop, target)
-			{chrom2, pop__} = rouletteSelect(pop_, target)
+			{chrom1, pop_} = rouletteSelect(pop)
+			{chrom2, pop__} = rouletteSelect(pop_)
 			{chrom1C, chrom2C} = crossover(crossoverRate, chrom1, chrom2)
 			{chrom1M, chrom2M} = {mutate(mutationRate, chrom1C), mutate(mutationRate, chrom2C)}
 			{[chrom1M, chrom2M], pop__}
@@ -187,22 +208,22 @@ defmodule App do
 	end
 	
 	finalPopulation = step.(step, initialPopulation, 0)
-	best = Enum.max_by(finalPopulation, fn chrom -> fitness(chrom, target) end)
+	best = Enum.max_by(finalPopulation, fn chrom -> chrom.fitness end)
 	
 	IO.puts "best: " <> showChromosome(best)
 	IO.puts "= " <> showCleanChromosome(best)
-	IO.puts "= " <> inspect(decodeChromosome(best))
-	IO.puts "fitness: " <> inspect(fitness(best, target))
+	IO.puts "= " <> inspect(decodeGenes(best.genes))
+	IO.puts "fitness: " <> inspect(best.fitness)
   end
 
   def showChromosome(chrom) do
-	chrom
+	chrom.genes
 	|> Enum.map(fn gene -> decodeGene(gene) end)
 	|> Enum.join(" ")
   end
 
   def showCleanChromosome(chrom) do
-	chars = Enum.map(chrom, fn gene -> decodeGene(gene) end)
+	chars = Enum.map(chrom.genes, fn gene -> decodeGene(gene) end)
 	f = fn char, {acc, tok} ->
 	  cond do
 		tok == :number && isNumber(char) ->
@@ -219,63 +240,63 @@ defmodule App do
   end
 end
 
-# 6 + 5 * 4 / 2 + 1
-# = 23
-chrom1 = [
-	[0,1,1,0],
-	[1,0,1,0],
-	[0,1,0,1],
-	[1,1,0,0],
-	[0,1,0,0],
-	[1,1,0,1],
-	[0,0,1,0],
-	[1,0,1,0],
-	[0,0,0,1]
-]
-IO.puts "chrom1"
-IO.inspect chrom1
-IO.inspect App.decodeChromosome(chrom1)
-IO.inspect App.fitness(chrom1, 42)
+# # 6 + 5 * 4 / 2 + 1
+# # = 23
+# chrom1 = [
+# 	[0,1,1,0],
+# 	[1,0,1,0],
+# 	[0,1,0,1],
+# 	[1,1,0,0],
+# 	[0,1,0,0],
+# 	[1,1,0,1],
+# 	[0,0,1,0],
+# 	[1,0,1,0],
+# 	[0,0,0,1]
+# ]
+# IO.puts "chrom1"
+# IO.inspect chrom1
+# IO.inspect App.decodeGenes(chrom1.genes)
+# IO.inspect App.fitness(chrom1, 42)
 
-# 2 2 + n/a - 7 2
-# = 2 + 7
-# = 9
-chrom2 = [
-  [0,0,1,0],
-  [0,0,1,0],
-  [1,0,1,0],
-  [1,1,1,0],
-  [1,0,1,1],
-  [0,1,1,1],
-  [0,0,1,0]
-]
-IO.puts "chrom2"
-IO.inspect chrom2
-IO.inspect App.decodeChromosome(chrom2)
-IO.inspect App.fitness(chrom2, 42)
+# # 2 2 + n/a - 7 2
+# # = 2 + 7
+# # = 9
+# chrom2 = [
+#   [0,0,1,0],
+#   [0,0,1,0],
+#   [1,0,1,0],
+#   [1,1,1,0],
+#   [1,0,1,1],
+#   [0,1,1,1],
+#   [0,0,1,0]
+# ]
+# IO.puts "chrom2"
+# IO.inspect chrom2
+# IO.inspect App.decodeGenes(chrom2.genes)
+# IO.inspect App.fitness(chrom2, 42)
 
-# 1 / 0
-# = 10^12
-chrom3 = [
-  [0,0,0,1],
-  [1,1,0,1],
-  [0,0,0,0]
-]
-IO.puts "chrom3"
-IO.inspect chrom3
-IO.inspect App.decodeChromosome(chrom3)
-IO.inspect App.fitness(chrom3, 42)
+# # 1 / 0
+# # = 10^12
+# chrom3 = [
+#   [0,0,0,1],
+#   [1,1,0,1],
+#   [0,0,0,0]
+# ]
+# IO.puts "chrom3"
+# IO.inspect chrom3
+# IO.inspect App.decodeGenes(chrom3.genes)
+# IO.inspect App.fitness(chrom3, 42)
 
-# 6 * 7
-# = 42
-chrom4 = [
-  [0,1,1,0],
-  [1,1,0,0],
-  [0,1,1,1]
-]
-IO.puts "chrom4"
-IO.inspect chrom4
-IO.inspect App.decodeChromosome(chrom4)
-IO.inspect App.fitness(chrom4, 42)
+# # 6 * 7
+# # = 42
+# chrom4 = [
+#   [0,1,1,0],
+#   [1,1,0,0],
+#   [0,1,1,1]
+# ]
+# IO.puts "chrom4"
+# IO.inspect chrom4
+# IO.inspect App.decodeGenes(chrom4.genes)
+# IO.inspect chrom4.fitness
 
-IO.inspect App.run(100, 20, 42, 0.7, 0.001)
+IO.inspect App.run(500, 20, 42, 0.7, 0.001)
