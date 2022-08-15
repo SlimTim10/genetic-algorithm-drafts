@@ -5,7 +5,6 @@ import Control.Monad (replicateM)
 import Data.List (foldl', maximumBy, intercalate)
 import Data.Function (on)
 import qualified Control.Monad.IO.Class as IO
-import qualified Data.List.Split as Split
 import qualified System.Random.Stateful as Random
 import qualified Control.Monad.Loops as CML
 
@@ -124,20 +123,6 @@ randomChromosome g x y trg = do
 
 chromosomeBits :: Chromosome -> [Bit]
 chromosomeBits = concatMap (\(g1, g2, g3, g4) -> [g1, g2, g3, g4]) . genes
-
-bitsToChromosome
-  :: Float -- ^ Target
-  -> [Bit] -- ^ Bits
-  -> Chromosome
-bitsToChromosome trg bs = Chromosome
-  { genes = gs
-  , fitness = calcFitness trg gs
-  , target = trg
-  }
-  where
-    f [a, b, c, d] = (a, b, c, d)
-    f _ = error "Invalid gene length"
-    gs = map f . Split.chunksOf geneLength $ bs
 
 isOperator :: Char -> Bool
 isOperator CharAdd = True
@@ -343,6 +328,9 @@ main = do
 
   let trg = 42
   putStrLn $ "target: " <> show trg
+  -- Uncomment to force fixed randomization (useful for testing)
+  -- let rand = Random.mkStdGen 0
+  -- Random.setStdGen rand
   best <- run Random.globalStdGen 500 20 trg 0.7 0.001
   putStrLn $ "best:"
   putStrLn $ showChromosome best
