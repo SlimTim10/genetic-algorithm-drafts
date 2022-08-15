@@ -100,7 +100,7 @@ randomBit g = do
 
 randomGene
   :: (MonadFail m, Random.RandomGenM g r m)
-  => g
+  => g -- ^ Random generator
   -> m Gene
 randomGene g = do
   [b1, b2, b3, b4] <- replicateM geneLength . randomBit $ g
@@ -108,7 +108,7 @@ randomGene g = do
 
 randomChromosome
   :: (MonadFail m, Random.RandomGenM g r m)
-  => g
+  => g -- ^ Random generator
   -> Integer -- ^ Minimum length, inclusive
   -> Integer -- ^ Maximum length, inclusive
   -> Float -- ^ Target number
@@ -205,7 +205,7 @@ calcFitness trg gs
 
 rouletteSelect
   :: (MonadFail m, Random.RandomGenM g r m)
-  => g
+  => g -- ^ Random generator
   -> [Chromosome]
   -> m (Chromosome, [Chromosome])
 rouletteSelect g population = do
@@ -220,7 +220,7 @@ rouletteSelect g population = do
 
 crossover
   :: (MonadFail m, Random.RandomGenM g r m)
-  => g
+  => g -- ^ Random generator
   -> Float -- ^ Crossover rate
   -> Chromosome -- ^ First chromosome
   -> Chromosome -- ^ Second chromosome
@@ -241,23 +241,37 @@ crossover g crossoverRate x y = do
         )
     else pure (x, y)
 
+mutateGene
+  :: (MonadFail m, Random.RandomGenM g r m)
+  => g -- ^ Random generator
+  -> Float -- ^ Mutation rate
+  -> Gene
+  -> m Gene
+mutateGene g mutationRate (a, b, c, d) = do
+  [a', b', c', d'] <- mapM f [a, b, c, d]
+  return (a', b', c', d')
+  where
+    f bit = do
+      r <- Random.uniformRM (0 :: Float, 1 :: Float) g
+      if r <= mutationRate
+        then pure $ flipBit bit
+        else pure $ bit
+    flipBit Bit0 = Bit1
+    flipBit Bit1 = Bit0
+
 mutate
   :: (MonadFail m, Random.RandomGenM g r m)
-  => g
+  => g -- ^ Random generator
   -> Float -- ^ Mutation rate
   -> Chromosome -- ^ Chromosome to mutate
   -> m Chromosome
 mutate g mutationRate x = do
-  ys <- mapM f (chromosomeBits x)
-  pure $ bitsToChromosome (target x) ys
-  where
-    f b = do
-      r <- Random.uniformRM (0 :: Float, 1 :: Float) g
-      if r <= mutationRate
-        then pure $ flipBit b
-        else pure $ b
-    flipBit Bit0 = Bit1
-    flipBit Bit1 = Bit0
+  gs <- mapM (mutateGene g mutationRate) (genes x)
+  return Chromosome
+    { genes = gs
+    , fitness = calcFitness (target x) gs
+    , target = target x
+    }
 
 {-
 At the beginning of a run of a genetic algorithm a large population of random chromosomes is created. Each one, when decoded will represent a different solution to the problem at hand. Let's say there are N chromosomes in the initial population. Then, the following steps are repeated until a solution is found
@@ -269,7 +283,7 @@ At the beginning of a run of a genetic algorithm a large population of random ch
 -}
 run
   :: (MonadFail m, Random.RandomGenM g r m, IO.MonadIO m)
-  => g
+  => g -- ^ Random generator
   -> Int -- ^ Population size
   -> Int -- ^ Maximum steps
   -> Float -- ^ Target number
