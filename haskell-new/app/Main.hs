@@ -1,7 +1,7 @@
 module Main where
 
 import qualified Data.List as List
-import qualified Data.List.Split as Split
+import qualified Data.List.Split as List.Split
 import qualified System.IO
 -- monadic pseudo-random number generators
 import qualified System.Random.Stateful as Random
@@ -13,7 +13,91 @@ import Data.Function (on)
 data Bit = Bit0 | Bit1
   deriving (Show, Eq)
 
-type Gene = (Bit, Bit, Bit, Bit)
+data Gene
+  = NumberGene (Bit, Bit, Bit, Bit)
+  | OperatorGene (Bit, Bit)
+  deriving (Show)
+
+-- How many bits are in a number gene.
+numberGeneSize :: Int
+numberGeneSize = 4
+
+-- How many bits are in an operator gene.
+operatorGeneSize :: Int
+operatorGeneSize = 2
+
+-- The alleles that genes can express.
+data Allele
+  = Allele0
+  | Allele1
+  | Allele2
+  | Allele3
+  | Allele4
+  | Allele5
+  | Allele6
+  | Allele7
+  | Allele8
+  | Allele9
+  | AlleleAdd
+  | AlleleSub
+  | AlleleMul
+  | AlleleDiv
+  | AlleleInvalid
+  deriving (Eq)
+
+instance Show Allele where
+  show Allele0 = "0"
+  show Allele1 = "1"
+  show Allele2 = "2"
+  show Allele3 = "3"
+  show Allele4 = "4"
+  show Allele5 = "5"
+  show Allele6 = "6"
+  show Allele7 = "7"
+  show Allele8 = "8"
+  show Allele9 = "9"
+  show AlleleAdd = "+"
+  show AlleleSub = "-"
+  show AlleleMul = "*"
+  show AlleleDiv = "/"
+  show AlleleInvalid = "(junk)"
+
+decodeGene :: Gene -> Allele
+decodeGene (NumberGene (Bit0, Bit0, Bit0, Bit0)) = Allele0
+decodeGene (NumberGene (Bit0, Bit0, Bit0, Bit1)) = Allele1
+decodeGene (NumberGene (Bit0, Bit0, Bit1, Bit0)) = Allele2
+decodeGene (NumberGene (Bit0, Bit0, Bit1, Bit1)) = Allele3
+decodeGene (NumberGene (Bit0, Bit1, Bit0, Bit0)) = Allele4
+decodeGene (NumberGene (Bit0, Bit1, Bit0, Bit1)) = Allele5
+decodeGene (NumberGene (Bit0, Bit1, Bit1, Bit0)) = Allele6
+decodeGene (NumberGene (Bit0, Bit1, Bit1, Bit1)) = Allele7
+decodeGene (NumberGene (Bit1, Bit0, Bit0, Bit0)) = Allele8
+decodeGene (NumberGene (Bit1, Bit0, Bit0, Bit1)) = Allele9
+decodeGene (OperatorGene (Bit0, Bit0)) = AlleleAdd
+decodeGene (OperatorGene (Bit0, Bit1)) = AlleleSub
+decodeGene (OperatorGene (Bit1, Bit0)) = AlleleMul
+decodeGene (OperatorGene (Bit1, Bit1)) = AlleleDiv
+decodeGene _ = AlleleInvalid
+
+encodeGene :: Allele -> Gene
+encodeGene Allele0 = NumberGene (Bit0, Bit0, Bit0, Bit0)
+encodeGene Allele1 = NumberGene (Bit0, Bit0, Bit0, Bit1)
+encodeGene Allele2 = NumberGene (Bit0, Bit0, Bit1, Bit0)
+encodeGene Allele3 = NumberGene (Bit0, Bit0, Bit1, Bit1)
+encodeGene Allele4 = NumberGene (Bit0, Bit1, Bit0, Bit0)
+encodeGene Allele5 = NumberGene (Bit0, Bit1, Bit0, Bit1)
+encodeGene Allele6 = NumberGene (Bit0, Bit1, Bit1, Bit0)
+encodeGene Allele7 = NumberGene (Bit0, Bit1, Bit1, Bit1)
+encodeGene Allele8 = NumberGene (Bit1, Bit0, Bit0, Bit0)
+encodeGene Allele9 = NumberGene (Bit1, Bit0, Bit0, Bit1)
+encodeGene AlleleAdd = OperatorGene (Bit0, Bit0)
+encodeGene AlleleSub = OperatorGene (Bit0, Bit1)
+encodeGene AlleleMul = OperatorGene (Bit1, Bit0)
+encodeGene AlleleDiv = OperatorGene (Bit1, Bit1)
+encodeGene AlleleInvalid = NumberGene (Bit1, Bit1, Bit1, Bit1)
+
+-- encodeGene . decodeGene = id
+-- decodeGene . encodeGene = id
 
 type Chromosome = [Gene]
 
@@ -23,85 +107,9 @@ data Organism = Organism
   }
   deriving (Show)
 
-data CChar
-  = CChar0
-  | CChar1
-  | CChar2
-  | CChar3
-  | CChar4
-  | CChar5
-  | CChar6
-  | CChar7
-  | CChar8
-  | CChar9
-  | CCharAdd
-  | CCharSub
-  | CCharMul
-  | CCharDiv
-  | CCharInvalid
-
-instance Show CChar where
-  show CChar0 = "0"
-  show CChar1 = "1"
-  show CChar2 = "2"
-  show CChar3 = "3"
-  show CChar4 = "4"
-  show CChar5 = "5"
-  show CChar6 = "6"
-  show CChar7 = "7"
-  show CChar8 = "8"
-  show CChar9 = "9"
-  show CCharAdd = "+"
-  show CCharSub = "-"
-  show CCharMul = "*"
-  show CCharDiv = "/"
-  show CCharInvalid = "n/a"
-
--- | How many bits are in a gene.
-geneLength :: Int
-geneLength = 4
-
--- TODO: find a better solution?
--- | Some absurdly high number to represent perfect fitness.
+-- | Some absurdly high number to circumvent division by 0.
 highNumber :: Float
 highNumber = 10^(12 :: Integer)
-
-encodeGene :: CChar -> Gene
-encodeGene CChar0 = (Bit0, Bit0, Bit0, Bit0)
-encodeGene CChar1 = (Bit0, Bit0, Bit0, Bit1)
-encodeGene CChar2 = (Bit0, Bit0, Bit1, Bit0)
-encodeGene CChar3 = (Bit0, Bit0, Bit1, Bit1)
-encodeGene CChar4 = (Bit0, Bit1, Bit0, Bit0)
-encodeGene CChar5 = (Bit0, Bit1, Bit0, Bit1)
-encodeGene CChar6 = (Bit0, Bit1, Bit1, Bit0)
-encodeGene CChar7 = (Bit0, Bit1, Bit1, Bit1)
-encodeGene CChar8 = (Bit1, Bit0, Bit0, Bit0)
-encodeGene CChar9 = (Bit1, Bit0, Bit0, Bit1)
-encodeGene CCharAdd = (Bit1, Bit0, Bit1, Bit0)
-encodeGene CCharSub = (Bit1, Bit0, Bit1, Bit1)
-encodeGene CCharMul = (Bit1, Bit1, Bit0, Bit0)
-encodeGene CCharDiv = (Bit1, Bit1, Bit0, Bit1)
-encodeGene CCharInvalid = (Bit1, Bit1, Bit1, Bit1)
-
-decodeGene :: Gene -> CChar
-decodeGene (Bit0, Bit0, Bit0, Bit0) = CChar0
-decodeGene (Bit0, Bit0, Bit0, Bit1) = CChar1
-decodeGene (Bit0, Bit0, Bit1, Bit0) = CChar2
-decodeGene (Bit0, Bit0, Bit1, Bit1) = CChar3
-decodeGene (Bit0, Bit1, Bit0, Bit0) = CChar4
-decodeGene (Bit0, Bit1, Bit0, Bit1) = CChar5
-decodeGene (Bit0, Bit1, Bit1, Bit0) = CChar6
-decodeGene (Bit0, Bit1, Bit1, Bit1) = CChar7
-decodeGene (Bit1, Bit0, Bit0, Bit0) = CChar8
-decodeGene (Bit1, Bit0, Bit0, Bit1) = CChar9
-decodeGene (Bit1, Bit0, Bit1, Bit0) = CCharAdd
-decodeGene (Bit1, Bit0, Bit1, Bit1) = CCharSub
-decodeGene (Bit1, Bit1, Bit0, Bit0) = CCharMul
-decodeGene (Bit1, Bit1, Bit0, Bit1) = CCharDiv
-decodeGene _ = CCharInvalid
-
--- encodeGene . decodeGene = id
--- decodeGene . encodeGene = id
 
 -- | Generate a random bit.
 randomBit :: Random.RandomGenM rg r m => rg -> m Bit
@@ -111,24 +119,31 @@ randomBit rg = do
     0 -> pure Bit0
     _ -> pure Bit1
 
--- | Generate a random gene.
+data NumberOrOperator = Number | Operator
+
+-- | Generate a random number or operator gene.
 randomGene
   :: (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
+  -> NumberOrOperator
   -> m Gene
-randomGene rg = do
-  [b1, b2, b3, b4] <- Monad.replicateM geneLength . randomBit $ rg
-  pure (b1, b2, b3, b4)
+randomGene rg Number = do
+  [b1, b2, b3, b4] <- Monad.replicateM numberGeneSize . randomBit $ rg
+  pure $ NumberGene (b1, b2, b3, b4)
+randomGene rg Operator = do
+  [b1, b2] <- Monad.replicateM operatorGeneSize . randomBit $ rg
+  pure $ OperatorGene (b1, b2)
 
 -- | Generate a random chromosome of a given length (number of genes).
 randomChromosome
   :: (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
-  -> Integer -- ^ Length, inclusive
+  -> Integer -- ^ Length in genes
   -> m Chromosome
 randomChromosome rg len = do
-  gs <- Monad.replicateM (fromIntegral len) (randomGene rg)
-  pure gs
+  numberGenes <- Monad.replicateM ((ceiling :: Double -> Int) (fromIntegral len / 2)) (randomGene rg Number)
+  operatorGenes <- Monad.replicateM (fromIntegral (len `div` 2)) (randomGene rg Operator)
+  pure $ List.foldl' (\acc (x, y) -> acc <> [x, y]) [] $ zip numberGenes operatorGenes
 
 -- | Calculate the fitness of a given chromosome with respect to a given target number.
 calcFitness
@@ -138,42 +153,41 @@ calcFitness
 calcFitness target chrom = 1 / (abs (target - n) + 1)
   where n = phenotype chrom
 
-data Token = TokOperator | TokDigit
-  deriving (Eq)
-data Operator = OpAdd | OpSub | OpMul | OpDiv
-
-isOperator :: CChar -> Bool
-isOperator CCharAdd = True
-isOperator CCharSub = True
-isOperator CCharMul = True
-isOperator CCharDiv = True
+isOperator :: Allele -> Bool
+isOperator AlleleAdd = True
+isOperator AlleleSub = True
+isOperator AlleleMul = True
+isOperator AlleleDiv = True
 isOperator _ = False
 
-isDigit :: CChar -> Bool
-isDigit CChar0 = True
-isDigit CChar1 = True
-isDigit CChar2 = True
-isDigit CChar3 = True
-isDigit CChar4 = True
-isDigit CChar5 = True
-isDigit CChar6 = True
-isDigit CChar7 = True
-isDigit CChar8 = True
-isDigit CChar9 = True
+isDigit :: Allele -> Bool
+isDigit Allele0 = True
+isDigit Allele1 = True
+isDigit Allele2 = True
+isDigit Allele3 = True
+isDigit Allele4 = True
+isDigit Allele5 = True
+isDigit Allele6 = True
+isDigit Allele7 = True
+isDigit Allele8 = True
+isDigit Allele9 = True
 isDigit _ = False
 
 -- | Get a cleaned version of a chromosome.
--- e.g., 2 5 + - 3 -> 2 + 3
+-- Remove any junk alleles (along with their preceeding operators).
+-- e.g., 6 - (junk) * 3 + (junk) - 7 -> 6 * 3 - 7
 cleanChromosome :: Chromosome -> Chromosome
-cleanChromosome = fst . List.foldl' step ([], TokDigit)
+cleanChromosome x =
+  (\gs -> if length gs > 0 then tail gs else gs) -- Remove the initial plus
+  . map encodeGene
+  . List.foldl' (\acc (a, b) -> acc <> [a, b]) []
+  . filter (\(_, numberAllele) -> numberAllele /= AlleleInvalid)
+  . map (\[a, b] -> (a, b))
+  . filter (\chunk -> length chunk == 2)
+  $ List.Split.chunksOf 2 (AlleleAdd : alleles) -- Pairs of operators and numbers, with a plus added to the beginning
   where
-    step :: (Chromosome, Token) -> Gene -> (Chromosome, Token)
-    step (acc, tok) gene
-      | tok == TokDigit && isDigit (decodeGene gene) =
-        (acc <> [gene], TokOperator)
-      | tok == TokOperator && isOperator (decodeGene gene) =
-        (acc <> [gene], TokDigit)
-      | otherwise = (acc, tok)
+    alleles :: [Allele]
+    alleles = map decodeGene x
 
 -- | Get the phenotype of a chromosome.
 phenotype :: Chromosome -> Float
@@ -193,8 +207,12 @@ evaluate expr = fst . List.foldl' evaluate' (0, (+)) $ expr
     evaluate' (acc, _) '*' = (acc, (*))
     evaluate' (acc, _) '/' = (acc, (/))
     evaluate' (acc, op) x
-      | x `elem` "0123456789" = (acc `op` read [x], op)
+      | x `elem` "0123456789" =
+        if isNaN acc' || isInfinite acc'
+        then (highNumber, op)
+        else (acc', op)
       | otherwise = (acc, op)
+      where acc' = acc `op` read [x]
 
 -- | Use the roulette selection tactic to pick one organism from a given population.
 rouletteSelect
@@ -232,14 +250,6 @@ crossover rg crossoverRate (x, y) = do
       let yNew = yStart <> xEnd
       pure (xNew, yNew)
 
--- | Turn a chromosome into a flat list of bits.
-bits :: Chromosome -> [Bit]
-bits = concatMap (\(a, b, c, d) -> [a, b, c, d])
-
--- | Group a flat list of bits into genes.
-genes :: [Bit] -> [Gene]
-genes = map (\[a, b, c, d] -> (a, b, c, d)) . Split.chunksOf geneLength
-
 -- | Given a chromosome and a mutation rate, return the chromosome with its bits potentially mutate.
 mutate
   :: forall m rg r. (MonadFail m, Random.RandomGenM rg r m)
@@ -247,23 +257,28 @@ mutate
   -> Float -- ^ Mutation rate
   -> Chromosome -- ^ Chromosome to mutate
   -> m Chromosome
-mutate rg mutationRate x = do
-  let bs = bits x
-  bs' <- mapM maybeFlipBit bs
-  pure $ genes bs'
+mutate rg mutationRate x = mapM mutateGene x
   where
+    mutateGene :: Gene -> m Gene
+    mutateGene (NumberGene (b1, b2, b3, b4)) = do
+      [b1', b2', b3', b4'] <- mapM maybeFlipBit [b1, b2, b3, b4]
+      pure $ NumberGene (b1', b2', b3', b4')
+    mutateGene (OperatorGene (b1, b2)) = do
+      [b1', b2'] <- mapM maybeFlipBit [b1, b2]
+      pure $ OperatorGene (b1', b2')
+
     maybeFlipBit :: Bit -> m Bit
     maybeFlipBit bit = do
       r <- Random.uniformRM (0 :: Float, 1 :: Float) rg
       if r <= mutationRate
         then pure $ flipBit bit
-        else pure $ bit
+        else pure bit
 
     flipBit :: Bit -> Bit
     flipBit Bit0 = Bit1
     flipBit Bit1 = Bit0
 
--- An organism is a chromosome along with its fitness
+-- | An organism is a chromosome together with its fitness.
 withFitness
   :: Float -- ^ Target
   -> Chromosome
@@ -315,10 +330,10 @@ main :: IO ()
 main = do
   System.IO.hSetBuffering System.IO.stdout System.IO.NoBuffering
 
-  let populationSize :: Int = 20
+  let populationSize :: Int = 200
   let crossoverRate :: Float = 0.6
   let mutationRate :: Float = 0.05
-  let generationLimit :: Int = 20
+  let generationLimit :: Int = 50
   let target :: Float = 42
   
   putStrLn $ "Target: " <> show target
@@ -346,15 +361,15 @@ main = do
 -- = 23
 chrom1 :: Chromosome
 chrom1 = 
-  [ (Bit0,Bit1,Bit1,Bit0)
-  , (Bit1,Bit0,Bit1,Bit0)
-  , (Bit0,Bit1,Bit0,Bit1)
-  , (Bit1,Bit1,Bit0,Bit0)
-  , (Bit0,Bit1,Bit0,Bit0)
-  , (Bit1,Bit1,Bit0,Bit1)
-  , (Bit0,Bit0,Bit1,Bit0)
-  , (Bit1,Bit0,Bit1,Bit0)
-  , (Bit0,Bit0,Bit0,Bit1)
+  [ encodeGene Allele6
+  , encodeGene AlleleAdd
+  , encodeGene Allele5
+  , encodeGene AlleleMul
+  , encodeGene Allele4
+  , encodeGene AlleleDiv
+  , encodeGene Allele2
+  , encodeGene AlleleAdd
+  , encodeGene Allele1
   ]
 
 testEvaluateSpeed :: IO ()
