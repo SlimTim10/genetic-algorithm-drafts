@@ -156,14 +156,34 @@ calcFitness
   -> Chromosome
   -> Float -- ^ Fitness
 calcFitness target chrom = 1 / (abs (target - n) + 1)
-  where n = phenotype chrom
+  where
+    n =
+      evaluate
+      . concat
+      . map (show . decodeGene)
+      . cleanChromosome
+      $ chrom
+
+-- | Show an organism's raw expression as a string.
+phenotype :: Organism -> String
+phenotype =
+  List.intercalate " "
+  . map (show . decodeGene)
+  . oChromosome
+
+-- | Show an organism's cleaned up expression as a string.
+cleanPhenotype :: Organism -> String
+cleanPhenotype = phenotype . clean
+  where
+    clean :: Organism -> Organism
+    clean o@Organism{oChromosome=c} = o { oChromosome = cleanChromosome c }
 
 -- | Get a cleaned version of a chromosome.
 -- Remove any junk alleles (along with their preceeding operators).
 -- e.g., 6 - (junk) * 3 + (junk) - 7 -> 6 * 3 - 7
 cleanChromosome :: Chromosome -> Chromosome
 cleanChromosome x =
-  (\gs -> if length gs > 0 then tail gs else gs) -- Remove the initial plus
+  safeTail -- Remove the initial plus
   . map encodeGene
   . List.foldl' (\acc (a, b) -> acc <> [a, b]) []
   . filter (\(_, numberAllele) -> numberAllele /= AlleleInvalid)
@@ -173,14 +193,8 @@ cleanChromosome x =
   where
     alleles :: [Allele]
     alleles = map decodeGene x
-
--- | Get the phenotype of a chromosome (its evaluated number).
-phenotype :: Chromosome -> Float
-phenotype =
-  evaluate
-  . concat
-  . map (show . decodeGene)
-  . cleanChromosome
+    
+    safeTail xs = if length xs > 0 then tail xs else xs
 
 -- | Evaluate a math string, applying the operators as they appear from left-to-right.
 evaluate :: String -> Float
@@ -282,7 +296,7 @@ run
   -> Float -- ^ Target number
   -> m Organism
 run rg popSize crossoverRate mutationRate generationLimit target = do
-  let chromosomeLength = 20
+  let chromosomeLength = 24
   initialChromosomes :: [Chromosome] <- Monad.replicateM popSize (randomChromosome rg chromosomeLength)
   let initialPopulation :: [Organism] = map (withFitness target) initialChromosomes
   finalPopulation :: [Organism] <- head <$> Loops.unfoldrM step (initialPopulation, 0)
@@ -307,9 +321,6 @@ run rg popSize crossoverRate mutationRate generationLimit target = do
       let o2' :: Organism = withFitness target c2'
       pure $ [o1', o2']
 
-showChromosome :: Chromosome -> String
-showChromosome = List.intercalate " " . map (show . decodeGene)
-
 main :: IO ()
 main = do
   System.IO.hSetBuffering System.IO.stdout System.IO.NoBuffering
@@ -326,7 +337,7 @@ main = do
   -- let rand = Random.mkStdGen 0
   -- Random.setStdGen rand
 
-  best <- run
+  best :: Organism <- run
     Random.globalStdGen
     populationSize
     crossoverRate
@@ -335,9 +346,9 @@ main = do
     target
 
   putStrLn $ "Winner:"
-  putStrLn $ showChromosome (oChromosome best)
-  putStrLn $ "= " <> (showChromosome . cleanChromosome) (oChromosome best)
-  let p = phenotype (oChromosome best)
+  putStrLn $ phenotype best
+  putStrLn $ "= " <> cleanPhenotype best
+  let p = evaluate . phenotype $ best
   putStrLn $ "= " <> show p
 
 -- | Example chromosome.
