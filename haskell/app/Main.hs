@@ -183,9 +183,7 @@ calcFitness
   :: Float -- ^ Target
   -> [Gene] -- ^ Genes
   -> Float -- ^ Fitness
-calcFitness trg gs
-  | n == trg = highNumber
-  | otherwise = 1 / abs (trg - n)
+calcFitness trg gs = 1 / (abs (trg - n) + 1)
   where n = decodeGenes gs
 
 rouletteSelect
@@ -276,7 +274,7 @@ run
   -> Float -- ^ Mutation rate
   -> m Chromosome
 run g popSize maxSteps trg cr mr = do
-  initialPopulation <- replicateM popSize (randomChromosome g 1 40 trg)
+  initialPopulation <- replicateM popSize (randomChromosome g 40 40 trg)
   finalPopulation <- fmap head $ CML.unfoldrM step (initialPopulation, 0)
   pure $ maximumBy (compare `on` fitness) finalPopulation
   where
@@ -331,7 +329,7 @@ main = do
   -- Uncomment to force fixed randomization (useful for testing)
   -- let rand = Random.mkStdGen 0
   -- Random.setStdGen rand
-  best <- run Random.globalStdGen 500 20 trg 0.7 0.001
+  best <- run Random.globalStdGen 200 100 trg 0.7 0.001
   putStrLn $ "best:"
   putStrLn $ showChromosome best
   putStrLn $ "= " <> showCleanChromosome best
@@ -356,3 +354,11 @@ chrom1 = Chromosome
   , fitness = 0
   , target = 42
   }
+
+testEvaluateSpeed :: IO ()
+testEvaluateSpeed = do
+  putStrLn "Start"
+  let xs = replicate 100 [Char1, CharAdd, Char2, CharAdd, Char3, CharAdd, Char4, CharAdd, Char5, CharAdd, Char6, CharAdd, Char7, CharAdd, Char8, CharAdd, Char9]
+  let result = map evaluate xs
+  print result
+  putStrLn "Done"
