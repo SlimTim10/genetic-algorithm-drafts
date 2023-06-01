@@ -1,6 +1,5 @@
 module Main where
 
-import Prelude hiding (Char)
 import qualified Data.List as List
 import qualified Data.List.Split as Split
 import qualified System.IO
@@ -10,8 +9,6 @@ import qualified Control.Monad as Monad
 import qualified Control.Monad.IO.Class as IO
 import qualified Control.Monad.Loops as Loops
 import Data.Function (on)
-import qualified Language.Haskell.Interpreter as Interpreter
-import qualified Data.Either as Either
 
 data Bit = Bit0 | Bit1
   deriving (Show, Eq)
@@ -26,39 +23,39 @@ data Organism = Organism
   }
   deriving (Show)
 
-data Char
-  = Char0
-  | Char1
-  | Char2
-  | Char3
-  | Char4
-  | Char5
-  | Char6
-  | Char7
-  | Char8
-  | Char9
-  | CharAdd
-  | CharSub
-  | CharMul
-  | CharDiv
-  | CharInvalid
+data CChar
+  = CChar0
+  | CChar1
+  | CChar2
+  | CChar3
+  | CChar4
+  | CChar5
+  | CChar6
+  | CChar7
+  | CChar8
+  | CChar9
+  | CCharAdd
+  | CCharSub
+  | CCharMul
+  | CCharDiv
+  | CCharInvalid
 
-instance Show Char where
-  show Char0 = "0"
-  show Char1 = "1"
-  show Char2 = "2"
-  show Char3 = "3"
-  show Char4 = "4"
-  show Char5 = "5"
-  show Char6 = "6"
-  show Char7 = "7"
-  show Char8 = "8"
-  show Char9 = "9"
-  show CharAdd = "+"
-  show CharSub = "-"
-  show CharMul = "*"
-  show CharDiv = "/"
-  show CharInvalid = "n/a"
+instance Show CChar where
+  show CChar0 = "0"
+  show CChar1 = "1"
+  show CChar2 = "2"
+  show CChar3 = "3"
+  show CChar4 = "4"
+  show CChar5 = "5"
+  show CChar6 = "6"
+  show CChar7 = "7"
+  show CChar8 = "8"
+  show CChar9 = "9"
+  show CCharAdd = "+"
+  show CCharSub = "-"
+  show CCharMul = "*"
+  show CCharDiv = "/"
+  show CCharInvalid = "n/a"
 
 -- | How many bits are in a gene.
 geneLength :: Int
@@ -69,39 +66,39 @@ geneLength = 4
 highNumber :: Float
 highNumber = 10^(12 :: Integer)
 
-encodeGene :: Char -> Gene
-encodeGene Char0 = (Bit0, Bit0, Bit0, Bit0)
-encodeGene Char1 = (Bit0, Bit0, Bit0, Bit1)
-encodeGene Char2 = (Bit0, Bit0, Bit1, Bit0)
-encodeGene Char3 = (Bit0, Bit0, Bit1, Bit1)
-encodeGene Char4 = (Bit0, Bit1, Bit0, Bit0)
-encodeGene Char5 = (Bit0, Bit1, Bit0, Bit1)
-encodeGene Char6 = (Bit0, Bit1, Bit1, Bit0)
-encodeGene Char7 = (Bit0, Bit1, Bit1, Bit1)
-encodeGene Char8 = (Bit1, Bit0, Bit0, Bit0)
-encodeGene Char9 = (Bit1, Bit0, Bit0, Bit1)
-encodeGene CharAdd = (Bit1, Bit0, Bit1, Bit0)
-encodeGene CharSub = (Bit1, Bit0, Bit1, Bit1)
-encodeGene CharMul = (Bit1, Bit1, Bit0, Bit0)
-encodeGene CharDiv = (Bit1, Bit1, Bit0, Bit1)
-encodeGene CharInvalid = (Bit1, Bit1, Bit1, Bit1)
+encodeGene :: CChar -> Gene
+encodeGene CChar0 = (Bit0, Bit0, Bit0, Bit0)
+encodeGene CChar1 = (Bit0, Bit0, Bit0, Bit1)
+encodeGene CChar2 = (Bit0, Bit0, Bit1, Bit0)
+encodeGene CChar3 = (Bit0, Bit0, Bit1, Bit1)
+encodeGene CChar4 = (Bit0, Bit1, Bit0, Bit0)
+encodeGene CChar5 = (Bit0, Bit1, Bit0, Bit1)
+encodeGene CChar6 = (Bit0, Bit1, Bit1, Bit0)
+encodeGene CChar7 = (Bit0, Bit1, Bit1, Bit1)
+encodeGene CChar8 = (Bit1, Bit0, Bit0, Bit0)
+encodeGene CChar9 = (Bit1, Bit0, Bit0, Bit1)
+encodeGene CCharAdd = (Bit1, Bit0, Bit1, Bit0)
+encodeGene CCharSub = (Bit1, Bit0, Bit1, Bit1)
+encodeGene CCharMul = (Bit1, Bit1, Bit0, Bit0)
+encodeGene CCharDiv = (Bit1, Bit1, Bit0, Bit1)
+encodeGene CCharInvalid = (Bit1, Bit1, Bit1, Bit1)
 
-decodeGene :: Gene -> Char
-decodeGene (Bit0, Bit0, Bit0, Bit0) = Char0
-decodeGene (Bit0, Bit0, Bit0, Bit1) = Char1
-decodeGene (Bit0, Bit0, Bit1, Bit0) = Char2
-decodeGene (Bit0, Bit0, Bit1, Bit1) = Char3
-decodeGene (Bit0, Bit1, Bit0, Bit0) = Char4
-decodeGene (Bit0, Bit1, Bit0, Bit1) = Char5
-decodeGene (Bit0, Bit1, Bit1, Bit0) = Char6
-decodeGene (Bit0, Bit1, Bit1, Bit1) = Char7
-decodeGene (Bit1, Bit0, Bit0, Bit0) = Char8
-decodeGene (Bit1, Bit0, Bit0, Bit1) = Char9
-decodeGene (Bit1, Bit0, Bit1, Bit0) = CharAdd
-decodeGene (Bit1, Bit0, Bit1, Bit1) = CharSub
-decodeGene (Bit1, Bit1, Bit0, Bit0) = CharMul
-decodeGene (Bit1, Bit1, Bit0, Bit1) = CharDiv
-decodeGene _ = CharInvalid
+decodeGene :: Gene -> CChar
+decodeGene (Bit0, Bit0, Bit0, Bit0) = CChar0
+decodeGene (Bit0, Bit0, Bit0, Bit1) = CChar1
+decodeGene (Bit0, Bit0, Bit1, Bit0) = CChar2
+decodeGene (Bit0, Bit0, Bit1, Bit1) = CChar3
+decodeGene (Bit0, Bit1, Bit0, Bit0) = CChar4
+decodeGene (Bit0, Bit1, Bit0, Bit1) = CChar5
+decodeGene (Bit0, Bit1, Bit1, Bit0) = CChar6
+decodeGene (Bit0, Bit1, Bit1, Bit1) = CChar7
+decodeGene (Bit1, Bit0, Bit0, Bit0) = CChar8
+decodeGene (Bit1, Bit0, Bit0, Bit1) = CChar9
+decodeGene (Bit1, Bit0, Bit1, Bit0) = CCharAdd
+decodeGene (Bit1, Bit0, Bit1, Bit1) = CCharSub
+decodeGene (Bit1, Bit1, Bit0, Bit0) = CCharMul
+decodeGene (Bit1, Bit1, Bit0, Bit1) = CCharDiv
+decodeGene _ = CCharInvalid
 
 -- encodeGene . decodeGene = id
 -- decodeGene . encodeGene = id
@@ -137,33 +134,32 @@ randomChromosome rg len = do
 calcFitness
   :: Float -- ^ Target
   -> Chromosome
-  -> IO Float -- ^ Fitness
-calcFitness target chrom = do
-  n <- phenotype chrom
-  pure $ (1 / (abs (target - n) + 1))
+  -> Float -- ^ Fitness
+calcFitness target chrom = 1 / (abs (target - n) + 1)
+  where n = phenotype chrom
 
 data Token = TokOperator | TokDigit
   deriving (Eq)
 data Operator = OpAdd | OpSub | OpMul | OpDiv
 
-isOperator :: Char -> Bool
-isOperator CharAdd = True
-isOperator CharSub = True
-isOperator CharMul = True
-isOperator CharDiv = True
+isOperator :: CChar -> Bool
+isOperator CCharAdd = True
+isOperator CCharSub = True
+isOperator CCharMul = True
+isOperator CCharDiv = True
 isOperator _ = False
 
-isDigit :: Char -> Bool
-isDigit Char0 = True
-isDigit Char1 = True
-isDigit Char2 = True
-isDigit Char3 = True
-isDigit Char4 = True
-isDigit Char5 = True
-isDigit Char6 = True
-isDigit Char7 = True
-isDigit Char8 = True
-isDigit Char9 = True
+isDigit :: CChar -> Bool
+isDigit CChar0 = True
+isDigit CChar1 = True
+isDigit CChar2 = True
+isDigit CChar3 = True
+isDigit CChar4 = True
+isDigit CChar5 = True
+isDigit CChar6 = True
+isDigit CChar7 = True
+isDigit CChar8 = True
+isDigit CChar9 = True
 isDigit _ = False
 
 -- | Get a cleaned version of a chromosome.
@@ -180,20 +176,25 @@ cleanChromosome = fst . List.foldl' step ([], TokDigit)
       | otherwise = (acc, tok)
 
 -- | Get the phenotype of a chromosome.
-phenotype :: Chromosome -> IO Float
-phenotype
-  = evaluate
+phenotype :: Chromosome -> Float
+phenotype =
+  evaluate
   . concat
   . map (show . decodeGene)
   . cleanChromosome
 
--- | Evaluate a math string.
-evaluate :: String -> IO Float
-evaluate expr = do
-  result :: Either Interpreter.InterpreterError String <- Interpreter.runInterpreter $ do
-    Interpreter.setImports ["Prelude"]
-    Interpreter.eval expr
-  pure $ read (Either.fromRight "0" result)
+-- | Evaluate a math string, applying the operators as they appear from left-to-right.
+evaluate :: String -> Float
+evaluate expr = fst . List.foldl' evaluate' (0, (+)) $ expr
+  where
+    evaluate' :: (Float, (Float -> Float -> Float)) -> Char -> (Float, (Float -> Float -> Float))
+    evaluate' (acc, _) '+' = (acc, (+))
+    evaluate' (acc, _) '-' = (acc, (-))
+    evaluate' (acc, _) '*' = (acc, (*))
+    evaluate' (acc, _) '/' = (acc, (/))
+    evaluate' (acc, op) x
+      | x `elem` "0123456789" = (acc `op` read [x], op)
+      | otherwise = (acc, op)
 
 -- | Use the roulette selection tactic to pick one organism from a given population.
 rouletteSelect
@@ -262,13 +263,12 @@ mutate rg mutationRate x = do
     flipBit Bit0 = Bit1
     flipBit Bit1 = Bit0
 
-chromosomeToOrganism
+-- An organism is a chromosome along with its fitness
+withFitness
   :: Float -- ^ Target
   -> Chromosome
-  -> IO Organism
-chromosomeToOrganism target x = do
-  fitness <- calcFitness target x
-  pure $ Organism x fitness
+  -> Organism
+withFitness target x = Organism x (calcFitness target x)
 
 run
   :: forall m rg r. (MonadFail m, Random.RandomGenM rg r m, IO.MonadIO m)
@@ -282,7 +282,7 @@ run
 run rg popSize crossoverRate mutationRate generationLimit target = do
   let chromosomeLength = 20
   initialChromosomes :: [Chromosome] <- Monad.replicateM popSize (randomChromosome rg chromosomeLength)
-  initialPopulation :: [Organism] <- IO.liftIO $ mapM (chromosomeToOrganism target) initialChromosomes
+  let initialPopulation :: [Organism] = map (withFitness target) initialChromosomes
   finalPopulation :: [Organism] <- head <$> Loops.unfoldrM step (initialPopulation, 0)
   pure $ List.maximumBy (compare `on` oFitness) finalPopulation
   where
@@ -304,8 +304,8 @@ run rg popSize crossoverRate mutationRate generationLimit target = do
       (c1, c2) :: (Chromosome, Chromosome) <- crossover rg crossoverRate (oChromosome o1, oChromosome o2)
       c1' :: Chromosome <- mutate rg mutationRate c1
       c2' :: Chromosome <- mutate rg mutationRate c2
-      o1' :: Organism <- IO.liftIO $ chromosomeToOrganism target c1'
-      o2' :: Organism <- IO.liftIO $ chromosomeToOrganism target c2'
+      let o1' :: Organism = withFitness target c1'
+      let o2' :: Organism = withFitness target c2'
       pure $ [o1', o2']
 
 showChromosome :: Chromosome -> String
@@ -338,7 +338,7 @@ main = do
   putStrLn $ "Winner:"
   putStrLn $ showChromosome (oChromosome best)
   putStrLn $ "= " <> (showChromosome . cleanChromosome) (oChromosome best)
-  p <- phenotype (oChromosome best)
+  let p = phenotype (oChromosome best)
   putStrLn $ "= " <> show p
 
 -- | Example chromosome.
@@ -361,6 +361,6 @@ testEvaluateSpeed :: IO ()
 testEvaluateSpeed = do
   putStrLn "Start"
   let xs = replicate 100 "1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9"
-  result <- mapM evaluate xs
+  let result = map evaluate xs
   print result
   putStrLn "Done"

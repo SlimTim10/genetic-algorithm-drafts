@@ -62,7 +62,7 @@ executable genetic-algorithm
 
     -- Modules included in this executable, other than Main.
     other-modules:
-        MathExpr
+        
 
     -- LANGUAGE extensions used by modules in this package.
     default-extensions:
