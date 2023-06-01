@@ -13,20 +13,21 @@ import Data.Function (on)
 data Bit = Bit0 | Bit1
   deriving (Show, Eq)
 
+-- | There are two kinds of genes: one for numbers and one for operators.
 data Gene
   = NumberGene (Bit, Bit, Bit, Bit)
   | OperatorGene (Bit, Bit)
   deriving (Show)
 
--- How many bits are in a number gene.
+-- | How many bits are in a number gene.
 numberGeneSize :: Int
 numberGeneSize = 4
 
--- How many bits are in an operator gene.
+-- | How many bits are in an operator gene.
 operatorGeneSize :: Int
 operatorGeneSize = 2
 
--- The alleles that genes can express.
+-- | The alleles that genes can express.
 data Allele
   = Allele0
   | Allele1
@@ -99,8 +100,10 @@ encodeGene AlleleInvalid = NumberGene (Bit1, Bit1, Bit1, Bit1)
 -- encodeGene . decodeGene = id
 -- decodeGene . encodeGene = id
 
+-- | A chromosome is a collection of genes.
 type Chromosome = [Gene]
 
+-- | An organism is a chromosome together with its fitness.
 data Organism = Organism
   { oChromosome :: Chromosome
   , oFitness :: Float
@@ -121,7 +124,7 @@ randomBit rg = do
 
 data NumberOrOperator = Number | Operator
 
--- | Generate a random number or operator gene.
+-- | Generate a random gene (number or operator).
 randomGene
   :: (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
@@ -134,7 +137,7 @@ randomGene rg Operator = do
   [b1, b2] <- Monad.replicateM operatorGeneSize . randomBit $ rg
   pure $ OperatorGene (b1, b2)
 
--- | Generate a random chromosome of a given length (number of genes).
+-- | Generate a random chromosome of a given length (number of genes). It will alternate number and operator genes, beginning with a number.
 randomChromosome
   :: (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
@@ -143,7 +146,9 @@ randomChromosome
 randomChromosome rg len = do
   numberGenes <- Monad.replicateM ((ceiling :: Double -> Int) (fromIntegral len / 2)) (randomGene rg Number)
   operatorGenes <- Monad.replicateM (fromIntegral (len `div` 2)) (randomGene rg Operator)
-  pure $ List.foldl' (\acc (x, y) -> acc <> [x, y]) [] $ zip numberGenes operatorGenes
+  pure $
+    List.foldl' (\acc (x, y) -> acc <> [x, y]) []
+    $ zip numberGenes operatorGenes
 
 -- | Calculate the fitness of a given chromosome with respect to a given target number.
 calcFitness
@@ -152,26 +157,6 @@ calcFitness
   -> Float -- ^ Fitness
 calcFitness target chrom = 1 / (abs (target - n) + 1)
   where n = phenotype chrom
-
-isOperator :: Allele -> Bool
-isOperator AlleleAdd = True
-isOperator AlleleSub = True
-isOperator AlleleMul = True
-isOperator AlleleDiv = True
-isOperator _ = False
-
-isDigit :: Allele -> Bool
-isDigit Allele0 = True
-isDigit Allele1 = True
-isDigit Allele2 = True
-isDigit Allele3 = True
-isDigit Allele4 = True
-isDigit Allele5 = True
-isDigit Allele6 = True
-isDigit Allele7 = True
-isDigit Allele8 = True
-isDigit Allele9 = True
-isDigit _ = False
 
 -- | Get a cleaned version of a chromosome.
 -- Remove any junk alleles (along with their preceeding operators).
@@ -189,7 +174,7 @@ cleanChromosome x =
     alleles :: [Allele]
     alleles = map decodeGene x
 
--- | Get the phenotype of a chromosome.
+-- | Get the phenotype of a chromosome (its evaluated number).
 phenotype :: Chromosome -> Float
 phenotype =
   evaluate
@@ -212,7 +197,8 @@ evaluate expr = fst . List.foldl' evaluate' (0, (+)) $ expr
         then (highNumber, op)
         else (acc', op)
       | otherwise = (acc, op)
-      where acc' = acc `op` read [x]
+      where
+        acc' = acc `op` read [x]
 
 -- | Use the roulette selection tactic to pick one organism from a given population.
 rouletteSelect
@@ -230,7 +216,7 @@ rouletteSelect rg population = do
     Nothing -> last population
     Just o -> o
 
--- | Given a pair of chromosomes and a crossover rate, return a pair of chromosomes that may be the original pair or crossed over.
+-- | Given a pair of chromosomes and a crossover rate, return a pair of chromosomes that may be crossed over or the original pair.
 crossover
   :: (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
@@ -250,7 +236,7 @@ crossover rg crossoverRate (x, y) = do
       let yNew = yStart <> xEnd
       pure (xNew, yNew)
 
--- | Given a chromosome and a mutation rate, return the chromosome with its bits potentially mutate.
+-- | Given a chromosome and a mutation rate, return the chromosome with its bits potentially mutated.
 mutate
   :: forall m rg r. (MonadFail m, Random.RandomGenM rg r m)
   => rg -- ^ Random generator
@@ -285,6 +271,7 @@ withFitness
   -> Organism
 withFitness target x = Organism x (calcFitness target x)
 
+-- | Run the genetic algorithm.
 run
   :: forall m rg r. (MonadFail m, Random.RandomGenM rg r m, IO.MonadIO m)
   => rg -- ^ Random generator
@@ -306,14 +293,11 @@ run rg popSize crossoverRate mutationRate generationLimit target = do
       | generation >= generationLimit = pure Nothing
       | otherwise = do
           IO.liftIO . putStrLn $ "Generation: " <> show generation
-          -- IO.liftIO . putStr $ "producing offspring" -- DEBUG
           newPop :: [Organism] <- concat <$> Monad.replicateM (popSize `div` 2) (produceOffspring pop)
-          -- IO.liftIO . putStrLn $ "" -- DEBUG
           pure $ Just (newPop, (newPop, generation + 1))
 
     produceOffspring :: [Organism] -> m [Organism]
     produceOffspring pop = do
-      -- IO.liftIO . putStr $ "." -- DEBUG
       o1 :: Organism <- rouletteSelect rg pop
       o2 :: Organism <- rouletteSelect rg pop
       (c1, c2) :: (Chromosome, Chromosome) <- crossover rg crossoverRate (oChromosome o1, oChromosome o2)
